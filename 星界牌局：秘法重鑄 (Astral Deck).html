@@ -1,0 +1,2874 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>星界牌局：秘法重鑄 (Astral Deck: Arcane Reforge)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050711;
+            color: #e2e8f0;
+            font-family: 'Noto Sans TC', sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        /* 星雲動態背景 */
+        .astral-bg {
+            background: radial-gradient(circle at 20% 25%, rgba(88, 28, 135, 0.24) 0%, transparent 45%),
+                        radial-gradient(circle at 80% 75%, rgba(14, 116, 144, 0.22) 0%, transparent 50%),
+                        radial-gradient(circle at 50% 50%, #090d1f 0%, #03050c 100%);
+        }
+        .title-glow {
+            text-shadow: 0 0 24px rgba(56, 189, 248, 0.65), 0 0 55px rgba(168, 85, 247, 0.45);
+        }
+        /* 卡牌視覺與懸停動效 */
+        .game-card {
+            transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s ease, border-color 0.22s ease;
+            background: linear-gradient(160deg, rgba(19, 26, 46, 0.96), rgba(10, 14, 28, 0.99));
+            backdrop-filter: blur(8px);
+        }
+        @media (hover: hover) {
+            .game-card:hover:not(.card-disabled) {
+                transform: translateY(-22px) scale(1.08);
+                z-index: 40;
+            }
+        }
+        .card-selected {
+            transform: translateY(-18px) scale(1.06) !important;
+            box-shadow: 0 0 32px rgba(56, 189, 248, 0.85) !important;
+            border-color: #38bdf8 !important;
+            z-index: 45;
+        }
+        @media (min-width: 640px) {
+            .card-selected {
+                transform: translateY(-28px) scale(1.1) !important;
+            }
+        }
+        .card-disabled {
+            opacity: 0.48;
+            filter: grayscale(0.45);
+            cursor: not-allowed;
+        }
+        .card-upgraded {
+            box-shadow: 0 0 22px rgba(250, 204, 21, 0.32);
+        }
+        /* 手機端安全橫向捲動區（避免 flex justify-center 截斷最左側卡牌） */
+        .hand-scroll-area {
+            display: flex;
+            align-items: center;
+            overflow-x: auto;
+            overflow-y: visible;
+            -webkit-overflow-scrolling: touch;
+            scroll-snap-type: x proximity;
+        }
+        .hand-inner-wrap {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
+            margin-right: auto;
+            padding: 0.75rem 0.75rem 0.5rem 0.75rem;
+        }
+        @media (min-width: 640px) {
+            .hand-inner-wrap {
+                gap: 0.75rem;
+                padding: 0.5rem;
+            }
+        }
+        /* 類型邊框色 */
+        .type-attack { border-color: rgba(244, 63, 94, 0.65); }
+        .type-attack:hover:not(.card-disabled) { border-color: #fb7185; box-shadow: 0 14px 32px rgba(244, 63, 94, 0.45); }
+        .type-skill { border-color: rgba(56, 189, 248, 0.65); }
+        .type-skill:hover:not(.card-disabled) { border-color: #7dd3fc; box-shadow: 0 14px 32px rgba(56, 189, 248, 0.45); }
+        .type-power { border-color: rgba(192, 132, 252, 0.7); }
+        .type-power:hover:not(.card-disabled) { border-color: #e879f9; box-shadow: 0 14px 32px rgba(192, 132, 252, 0.5); }
+
+        /* 敵人卡片選中與受擊震動 */
+        .enemy-box {
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+        .enemy-targetable {
+            cursor: pointer;
+            animation: pulseTarget 1.2s infinite;
+        }
+        @keyframes pulseTarget {
+            0%, 100% { box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.5); }
+            50% { box-shadow: 0 0 24px 4px rgba(244, 63, 94, 0.85); }
+        }
+        @keyframes shakeScreen {
+            0%, 100% { transform: translate(0, 0); }
+            20% { transform: translate(-7px, 4px); }
+            40% { transform: translate(7px, -4px); }
+            60% { transform: translate(-5px, -3px); }
+            80% { transform: translate(5px, 3px); }
+        }
+        .shake-active {
+            animation: shakeScreen 0.28s ease-in-out;
+        }
+        @keyframes floatUpFade {
+            0% { opacity: 1; transform: translate(-50%, 0) scale(0.9); }
+            25% { opacity: 1; transform: translate(-50%, -18px) scale(1.15); }
+            100% { opacity: 0; transform: translate(-50%, -56px) scale(0.95); }
+        }
+        .floating-dmg {
+            position: fixed;
+            pointer-events: none;
+            font-weight: 900;
+            z-index: 100;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+            animation: floatUpFade 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.85); border-radius: 4px; }
+    </style>
+</head>
+<body id="app-root" class="astral-bg relative select-none">
+
+    <!-- 背景星空粒子畫布 -->
+    <canvas id="bgCanvas" class="fixed inset-0 pointer-events-none z-0"></canvas>
+
+    <!-- 頂部全域狀態列（非標題畫面顯示） -->
+    <header id="top-bar" class="hidden relative z-30 bg-slate-950/85 border-b border-slate-800/90 px-3 sm:px-6 py-2.5 backdrop-blur-md flex flex-wrap items-center justify-between gap-2 shadow-xl">
+        <!-- 左側：職業、HP、星塵金幣、樓層 -->
+        <div class="flex items-center gap-3 sm:gap-4">
+            <div class="flex items-center gap-2">
+                <span id="top-class-icon" class="text-xl">🔮</span>
+                <div>
+                    <div id="top-class-name" class="text-xs sm:text-sm font-black text-cyan-300 leading-none">星辰術士</div>
+                    <div id="top-floor-text" class="text-[11px] font-mono text-slate-400 mt-0.5">星塔第 1 / 15 層</div>
+                </div>
+            </div>
+
+            <div class="h-6 w-px bg-slate-800"></div>
+
+            <!-- 生命值 -->
+            <div class="flex items-center gap-1.5 bg-slate-900/90 border border-rose-500/30 px-2.5 py-1 rounded-xl">
+                <span class="text-rose-400 text-xs">❤️</span>
+                <span id="top-hp-text" class="text-xs sm:text-sm font-black font-mono text-rose-200">75 / 75</span>
+            </div>
+
+            <!-- 星塵（金幣） -->
+            <div class="flex items-center gap-1.5 bg-slate-900/90 border border-amber-500/30 px-2.5 py-1 rounded-xl">
+                <span class="text-amber-400 text-xs">✨</span>
+                <span id="top-gold-text" class="text-xs sm:text-sm font-black font-mono text-amber-200">80</span>
+            </div>
+        </div>
+
+        <!-- 中間：已持有遺物列 -->
+        <div id="top-relics" class="flex items-center gap-1.5 flex-wrap">
+            <!-- 動態生成遺物徽章 -->
+        </div>
+
+        <!-- 右側：查看完整牌組、放棄戰鬥、新手教學、音效開關 -->
+        <div class="flex items-center gap-1.5 sm:gap-2">
+            <button id="btn-view-deck" class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-cyan-300 flex items-center gap-1.5 transition cursor-pointer">
+                <span>🃏 牌組</span>
+                <span id="top-deck-count" class="px-1.5 py-0.5 bg-slate-950 rounded text-[11px] font-mono text-white">10</span>
+            </button>
+            <button id="btn-abandon" class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-xs font-bold text-rose-300 flex items-center gap-1 transition cursor-pointer" title="放棄本局並重選職業">
+                <span>🏳️</span>
+                <span class="hidden sm:inline">放棄</span>
+            </button>
+            <button id="btn-help" class="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-amber-300 transition cursor-pointer" title="新手教學速覽">
+                ❔ 規則
+            </button>
+            <button id="btn-mute" class="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-sm transition cursor-pointer" title="切換音效">
+                🔊
+            </button>
+        </div>
+    </header>
+
+    <!-- 主畫面內容容器 -->
+    <main class="relative z-10 flex-1 w-full h-full overflow-hidden flex flex-col">
+
+        <!-- 1. TITLE：主畫面與三選一初始職業 -->
+        <section id="screen-title" class="w-full h-full flex items-center justify-center p-4 overflow-y-auto">
+            <div class="max-w-5xl w-full bg-slate-950/88 border border-slate-800/90 rounded-3xl p-5 sm:p-8 shadow-2xl backdrop-blur-xl my-auto">
+                <div class="text-center mb-6">
+                    <div class="inline-block px-3.5 py-1 rounded-full bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 text-xs font-bold tracking-widest mb-2">
+                        ASTRAL DECKBUILDER • 15層雙章節史詩爬塔 • 38張秘法卡牌
+                    </div>
+                    <h1 class="text-3xl sm:text-5xl font-black text-white tracking-tight title-glow">
+                        星界牌局：秘法重鑄
+                    </h1>
+                    <p class="text-slate-400 text-xs sm:text-sm mt-2 max-w-2xl mx-auto">
+                        構築專屬牌組、蒐集星界遺物、洞察敵人下一回合的行動意圖，跨越第 8 層守門首領並登上第 15 層星塔之巔擊敗吞星巨像！
+                    </p>
+                </div>
+
+                <!-- 三大職業卡片 -->
+                <div id="title-class-grid" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <!-- 動態渲染三大職業 -->
+                </div>
+
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-4 rounded-2xl">
+                    <button id="btn-title-guide" class="text-xs font-bold text-amber-300 hover:text-amber-200 underline underline-offset-4 cursor-pointer">
+                        📖 第一次玩卡牌肉鴿？點此查看 30 秒新手速覽
+                    </button>
+                    <button id="btn-start-run" class="w-full sm:w-auto px-9 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-blue-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-black text-base tracking-wider shadow-lg shadow-cyan-500/30 transition transform hover:scale-[1.03] active:scale-[0.98] cursor-pointer">
+                        ✨ 啟程攀登星塔
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. MAP：分支節點爬塔路線圖（15層） -->
+        <section id="screen-map" class="hidden w-full h-full flex flex-col items-center justify-between p-3 sm:p-6 overflow-y-auto">
+            <div class="text-center max-w-xl">
+                <span class="px-3 py-1 rounded-full bg-purple-500/20 border border-purple-400/40 text-purple-300 text-xs font-bold tracking-widest">
+                    STARLIGHT SPIRE • 15層星塔遠征路線圖
+                </span>
+                <h2 class="text-xl sm:text-3xl font-black text-white mt-1.5">選擇下一個星界節點</h2>
+                <p class="text-[11px] sm:text-xs text-slate-400 mt-1">點擊發光的相鄰節點前進（可左右滑動檢視整座 15 層星塔）</p>
+            </div>
+
+            <!-- 15 層節點畫布與互動層（支援橫向平滑捲動並自動捲動至當前進度） -->
+            <div id="map-scroll-viewport" class="relative w-full max-w-6xl flex-1 min-h-[340px] sm:min-h-[380px] my-2.5 bg-slate-950/75 border border-slate-800/90 rounded-3xl p-3 sm:p-4 shadow-2xl overflow-x-auto overflow-y-hidden flex items-center">
+                <div class="relative min-w-[1120px] w-full h-full flex items-center justify-center mx-auto">
+                    <svg id="map-lines-svg" class="absolute inset-0 w-full h-full pointer-events-none"></svg>
+                    <div id="map-nodes-container" class="relative w-full h-full flex justify-between items-center px-4 sm:px-8">
+                        <!-- 動態生成 15 列樓層節點 -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap justify-center gap-2.5 sm:gap-4 text-[11px] sm:text-xs text-slate-300 bg-slate-950/80 border border-slate-800 px-3.5 sm:px-5 py-2 rounded-2xl">
+                <span>⚔️ 普通戰鬥</span>
+                <span class="text-rose-400 font-bold">💀 菁英強敵</span>
+                <span class="text-amber-400 font-bold">🔥 星火營火</span>
+                <span class="text-cyan-400 font-bold">❓ 星界黑市</span>
+                <span class="text-fuchsia-400 font-bold">👹 第 8 層守門首領</span>
+                <span class="text-purple-400 font-bold">👑 第 15 層終焉首領</span>
+            </div>
+        </section>
+
+        <!-- 3. BATTLE：回合制卡牌戰鬥畫面 -->
+        <section id="screen-battle" class="hidden w-full h-full flex flex-col justify-between p-2 sm:p-4 relative overflow-hidden">
+            <!-- 上半部：玩家狀態區 vs 敵方陣營區（手機緊湊並排/自適應，確保不擠壓底部手牌區） -->
+            <div class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-3 items-center max-w-7xl w-full mx-auto overflow-y-auto py-1">
+                <!-- 左側：玩家角色立繪面板（佔 4 欄，手機端自動切換為橫向緊湊狀態卡） -->
+                <div class="lg:col-span-4 flex flex-col items-center justify-center w-full">
+                    <div id="player-battle-card" class="w-full max-w-md lg:max-w-xs bg-slate-950/85 border-2 border-cyan-500/40 rounded-2xl sm:rounded-3xl p-2.5 sm:p-4 shadow-2xl relative">
+                        <div class="flex items-center justify-between mb-1.5 sm:mb-2">
+                            <span id="battle-player-name" class="text-xs sm:text-sm font-black text-cyan-300">🔮 星辰術士</span>
+                            <span id="battle-turn-badge" class="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] sm:text-[11px] font-mono text-slate-300">第 1 回合</span>
+                        </div>
+
+                        <div class="flex lg:flex-col items-center gap-3 lg:gap-0">
+                            <!-- 幾何星界角色圖騰 -->
+                            <div class="my-0.5 sm:my-2 flex justify-center shrink-0">
+                                <div id="battle-player-avatar" class="w-12 h-12 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl bg-slate-900/90 border border-cyan-400/50 flex items-center justify-center text-2xl sm:text-4xl shadow-[0_0_25px_rgba(56,189,248,0.3)]">
+                                    🔮
+                                </div>
+                            </div>
+
+                            <!-- 玩家護甲與生命條 -->
+                            <div class="flex-1 w-full space-y-1 sm:space-y-1.5 mt-0 sm:mt-2">
+                                <div class="flex items-center justify-between text-[11px] sm:text-xs font-bold">
+                                    <span class="text-rose-400">❤️ 生命</span>
+                                    <span id="battle-player-hp" class="font-mono text-white">75 / 75</span>
+                                </div>
+                                <div class="w-full h-2 sm:h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-800 p-0.5">
+                                    <div id="battle-player-hp-bar" class="h-full bg-gradient-to-r from-rose-600 to-rose-400 rounded-full transition-all duration-200" style="width: 100%;"></div>
+                                </div>
+
+                                <!-- 護甲值與職業被動顯示 -->
+                                <div class="flex items-center justify-between gap-1.5 pt-0.5 sm:pt-1">
+                                    <div class="flex items-center gap-1 px-2 py-0.5 sm:py-1 rounded-lg sm:rounded-xl bg-sky-950/80 border border-sky-500/40">
+                                        <span class="text-xs sm:text-sm">🛡️</span>
+                                        <span class="text-[11px] sm:text-xs font-bold text-sky-300">護甲:</span>
+                                        <span id="battle-player-block" class="text-xs sm:text-sm font-black font-mono text-white">0</span>
+                                    </div>
+                                    <div id="battle-class-passive-box" class="px-2 py-0.5 sm:py-1 rounded-lg sm:rounded-xl bg-purple-950/80 border border-purple-500/40 text-[10px] sm:text-xs font-bold text-purple-200 truncate">
+                                        ✨ 星能: 0/3
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 玩家身上 Buff / Debuff 列 -->
+                        <div id="battle-player-statuses" class="flex flex-wrap gap-1 mt-1.5 sm:mt-2.5 empty:hidden"></div>
+                    </div>
+                </div>
+
+                <!-- 右側：敵人陣營（佔 8 欄） -->
+                <div class="lg:col-span-8 flex flex-col items-center justify-center w-full">
+                    <div id="target-hint-banner" class="hidden mb-1.5 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-400 text-rose-200 text-[11px] sm:text-xs font-bold animate-bounce text-center">
+                        🎯 請點擊要攻擊的敵人目標（點空白處或再點一次卡牌取消）
+                    </div>
+                    <div id="enemies-container" class="flex flex-wrap items-center justify-center gap-2 sm:gap-5 w-full">
+                        <!-- 動態生成敵人卡片 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 下半部：能量球、抽牌堆、手牌扇區、棄牌堆與結束回合按鈕 -->
+            <div class="max-w-7xl w-full mx-auto pt-1 pb-0.5 flex flex-col gap-1.5 shrink-0">
+                <!-- 控制列：能量、抽牌堆、提示、棄牌堆、結束回合 -->
+                <div class="flex items-center justify-between px-1 sm:px-2 gap-1.5">
+                    <div class="flex items-center gap-1.5 sm:gap-3">
+                        <!-- 能量水晶 -->
+                        <div class="w-11 h-11 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-cyan-500 to-blue-700 border-2 border-cyan-200 shadow-[0_0_20px_rgba(56,189,248,0.6)] flex flex-col items-center justify-center shrink-0">
+                            <span class="text-[9px] sm:text-[10px] font-bold text-cyan-100 leading-none">能量</span>
+                            <span id="battle-energy-text" class="text-sm sm:text-xl font-black font-mono text-white leading-tight">3/3</span>
+                        </div>
+
+                        <!-- 抽牌堆按鈕 -->
+                        <button id="btn-draw-pile" class="px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-[11px] sm:text-xs font-bold text-cyan-300 flex flex-col items-center cursor-pointer transition">
+                            <span>📚 抽牌</span>
+                            <span id="battle-draw-count" class="text-xs sm:text-sm font-black font-mono text-white">5</span>
+                        </button>
+                    </div>
+
+                    <div id="battle-log-text" class="hidden md:block text-xs text-slate-300 bg-slate-950/75 border border-slate-800 px-4 py-1.5 rounded-full">
+                        點擊手牌即可施放；單體攻擊牌可先點牌再點敵人！
+                    </div>
+
+                    <div class="flex items-center gap-1.5 sm:gap-3">
+                        <!-- 棄牌堆按鈕 -->
+                        <button id="btn-discard-pile" class="px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-[11px] sm:text-xs font-bold text-slate-300 flex flex-col items-center cursor-pointer transition">
+                            <span>🗑️ 棄牌</span>
+                            <span id="battle-discard-count" class="text-xs sm:text-sm font-black font-mono text-white">0</span>
+                        </button>
+
+                        <!-- 結束回合按鈕 -->
+                        <button id="btn-end-turn" class="px-3.5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black text-xs sm:text-base shadow-lg shadow-amber-500/30 transition transform active:scale-95 cursor-pointer shrink-0">
+                            結束回合 ⏭️
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 手牌區域（修正為 margin: auto 安全置中捲動，手機可完整滑動檢視第一張到最後一張） -->
+                <div id="hand-container" class="hand-scroll-area w-full min-h-[168px] sm:min-h-[215px]">
+                    <!-- 動態生成手牌 -->
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. REWARD：戰後獎勵三選一（卡牌 / 金幣 / 遺物） -->
+        <section id="screen-reward" class="hidden w-full h-full flex items-center justify-center p-4 overflow-y-auto">
+            <div class="max-w-4xl w-full bg-slate-950/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl text-center my-auto">
+                <span class="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-bold tracking-widest">
+                    VICTORY SPOILS • 戰利品結算
+                </span>
+                <h2 class="text-2xl sm:text-3xl font-black text-white mt-2">星界戰利品</h2>
+                <p id="reward-summary-text" class="text-xs sm:text-sm text-amber-300 font-bold mt-1">
+                    獲得 +35 ✨ 星塵！選擇一張新卡牌加入你的牌組：
+                </p>
+
+                <div id="reward-relic-banner" class="hidden my-3 p-3 rounded-2xl bg-purple-950/70 border border-purple-400/50 text-sm text-purple-200 font-bold"></div>
+
+                <div id="reward-cards-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-4 my-5 justify-items-center">
+                    <!-- 動態生成 3 張獎勵卡牌 -->
+                </div>
+
+                <button id="btn-skip-reward" class="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-bold text-slate-300 transition cursor-pointer">
+                    跳過選牌（獲得 +15 ✨ 星塵）
+                </button>
+            </div>
+        </section>
+
+        <!-- 5. REST：星火營火（回血或鍛造升級卡牌） -->
+        <section id="screen-rest" class="hidden w-full h-full flex items-center justify-center p-4 overflow-y-auto">
+            <div class="max-w-3xl w-full bg-slate-950/90 border border-amber-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl text-center my-auto">
+                <div class="text-4xl mb-2">🔥</div>
+                <h2 class="text-2xl sm:text-3xl font-black text-amber-300">星火營火</h2>
+                <p class="text-xs sm:text-sm text-slate-400 mt-1 mb-6">在星辰餘燼旁稍作整頓，選擇一項行動：</p>
+
+                <div id="rest-options-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <button id="btn-rest-heal" class="p-6 rounded-3xl bg-slate-900/90 hover:bg-slate-800 border-2 border-emerald-500/50 text-left transition transform hover:-translate-y-1 cursor-pointer">
+                        <div class="text-2xl mb-2">💚 冥想療癒</div>
+                        <div class="text-base font-black text-emerald-300 mb-1">恢復 35% 最大生命值</div>
+                        <p id="rest-heal-desc" class="text-xs text-slate-400">立即回復生命，為接下來的強敵做好準備。</p>
+                    </button>
+
+                    <button id="btn-rest-smith" class="p-6 rounded-3xl bg-slate-900/90 hover:bg-slate-800 border-2 border-amber-500/50 text-left transition transform hover:-translate-y-1 cursor-pointer">
+                        <div class="text-2xl mb-2">⚒️ 秘法鍛造</div>
+                        <div class="text-base font-black text-amber-300 mb-1">永久升級牌組中的 1 張卡牌</div>
+                        <p class="text-xs text-slate-400">強化卡牌傷害、護甲或降低能量消耗（卡名加上 + 號）。</p>
+                    </button>
+                </div>
+
+                <!-- 鍛造選牌區 -->
+                <div id="rest-upgrade-picker" class="hidden text-left mt-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="text-sm font-black text-amber-300">點擊選擇一張要鍛造升級的卡牌：</span>
+                        <button id="btn-cancel-smith" class="text-xs text-slate-400 hover:text-white underline cursor-pointer">返回</button>
+                    </div>
+                    <div id="rest-upgrade-cards" class="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-[340px] overflow-y-auto p-2"></div>
+                </div>
+
+                <div class="mt-4">
+                    <button id="btn-leave-rest" class="px-6 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-bold text-slate-300 transition cursor-pointer">
+                        略過整頓，直接前進 ➔
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6. EVENT / SHOP：星界奇遇與秘法商店 -->
+        <section id="screen-event" class="hidden w-full h-full flex items-center justify-center p-4 overflow-y-auto">
+            <div class="max-w-4xl w-full bg-slate-950/92 border border-cyan-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl my-auto">
+                <div class="text-center mb-5">
+                    <span id="event-badge" class="px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 text-xs font-bold tracking-widest">
+                        ASTRAL ENCOUNTER • 星界奇遇
+                    </span>
+                    <h2 id="event-title" class="text-2xl sm:text-3xl font-black text-white mt-2">虛空黑市商人</h2>
+                    <p id="event-desc" class="text-xs sm:text-sm text-slate-300 mt-1.5 max-w-2xl mx-auto">
+                        一位披著星塵斗篷的神秘旅人向你展示他蒐集的秘法卡牌與遠古遺物。
+                    </p>
+                </div>
+
+                <div id="event-content-area" class="my-4">
+                    <!-- 動態生成商店商品或奇遇選項 -->
+                </div>
+
+                <div class="text-center mt-5">
+                    <button id="btn-leave-event" class="px-8 py-3 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black text-sm shadow-lg cursor-pointer">
+                        繼續攀登星塔 ➔
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 7. VICTORY / GAMEOVER：結局畫面 -->
+        <section id="screen-end" class="hidden w-full h-full flex items-center justify-center p-4 overflow-y-auto">
+            <div class="max-w-xl w-full bg-slate-950/92 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl text-center my-auto">
+                <div id="end-badge" class="inline-block px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-bold tracking-widest mb-2">
+                    ASCENSION COMPLETE
+                </div>
+                <h2 id="end-title" class="text-3xl sm:text-4xl font-black text-white mb-2">星界征服者！</h2>
+                <p id="end-subtitle" class="text-sm text-slate-300 mb-6">你成功擊碎了吞星巨像，重鑄了星界秩序！</p>
+
+                <div class="grid grid-cols-3 gap-3 mb-6">
+                    <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-2xl">
+                        <div class="text-xs text-slate-400">抵達層數</div>
+                        <div id="end-stat-floor" class="text-xl font-black text-cyan-400 font-mono mt-1">15 / 15</div>
+                    </div>
+                    <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-2xl">
+                        <div class="text-xs text-slate-400">最終牌組</div>
+                        <div id="end-stat-deck" class="text-xl font-black text-purple-400 font-mono mt-1">15 張</div>
+                    </div>
+                    <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-2xl">
+                        <div class="text-xs text-slate-400">持有遺物</div>
+                        <div id="end-stat-relics" class="text-xl font-black text-amber-400 font-mono mt-1">4 件</div>
+                    </div>
+                </div>
+
+                <button id="btn-play-again" class="w-full py-4 rounded-2xl bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-black text-base tracking-wider shadow-lg transition transform hover:scale-[1.02] cursor-pointer">
+                    🔄 開啟新一輪星界牌局
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- 彈窗：牌堆檢視器（完整牌組 / 抽牌堆 / 棄牌堆） -->
+    <div id="modal-deck" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="max-w-4xl w-full bg-slate-900 border border-slate-700 rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col max-h-[85vh]">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+                <h3 id="modal-deck-title" class="text-lg sm:text-xl font-black text-cyan-300">🃏 當前牌組一覽</h3>
+                <button id="btn-close-deck" class="px-3 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 cursor-pointer">關閉 ✕</button>
+            </div>
+            <div id="modal-deck-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 overflow-y-auto p-1">
+                <!-- 動態渲染卡牌 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 彈窗：放棄戰鬥二次確認 -->
+    <div id="modal-abandon" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-slate-900 border-2 border-rose-500/50 rounded-3xl p-6 shadow-2xl text-center">
+            <div class="w-14 h-14 rounded-2xl bg-rose-500/15 border border-rose-500/40 flex items-center justify-center text-3xl mx-auto mb-3">
+                🏳️
+            </div>
+            <h3 class="text-xl font-black text-white mb-2">確定要放棄當前星塔遠征嗎？</h3>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-6">
+                放棄後本局的牌組構築、星界遺物與爬塔進度將會清空，並直接返回標題畫面重新選擇職業。
+            </p>
+            <div class="flex items-center gap-3">
+                <button id="btn-cancel-abandon" class="flex-1 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs sm:text-sm font-bold text-slate-200 transition cursor-pointer">
+                    繼續戰鬥
+                </button>
+                <button id="btn-confirm-abandon" class="flex-1 py-3 rounded-2xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-xs sm:text-sm font-black text-white shadow-lg shadow-rose-600/30 transition cursor-pointer">
+                    確定放棄重來
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 彈窗：新手教學速覽 -->
+    <div id="modal-help" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="max-w-2xl w-full bg-slate-900 border border-cyan-500/40 rounded-3xl p-6 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+                <h3 class="text-lg sm:text-xl font-black text-amber-300">📖 30 秒策略卡牌肉鴿速覽</h3>
+                <button id="btn-close-help" class="px-3 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 cursor-pointer">懂了！✕</button>
+            </div>
+            <div class="space-y-3 text-xs sm:text-sm text-slate-200 leading-relaxed">
+                <div class="p-3 rounded-2xl bg-slate-950/80 border border-slate-800">
+                    <strong class="text-cyan-400">1. 能量與出牌：</strong> 每回合你會抽 5 張牌並獲得 <strong>3 點能量</strong>。每張牌左上角的數字為消耗能量，只要能量足夠就能連續出牌！
+                </div>
+                <div class="p-3 rounded-2xl bg-slate-950/80 border border-slate-800">
+                    <strong class="text-rose-400">2. 預判敵人意圖：</strong> 敵人頭頂會清楚顯示它下一回合的行動（例如 <span class="text-rose-400 font-bold">⚔️ 攻擊 12</span>）。若敵人要重擊，記得優先打出 <span class="text-sky-400 font-bold">🛡️ 護甲牌</span> 抵擋傷害！
+                </div>
+                <div class="p-3 rounded-2xl bg-slate-950/80 border border-slate-800">
+                    <strong class="text-purple-400">3. 狀態與流派連鎖：</strong>
+                    <ul class="list-disc list-inside mt-1 text-slate-300 space-y-0.5">
+                        <li><strong>易傷 (Vulnerable)：</strong> 目標受到的攻擊傷害 <strong>+50%</strong>。</li>
+                        <li><strong>虛弱 (Weak)：</strong> 目標造成的攻擊傷害 <strong>-25%</strong>。</li>
+                        <li><strong>劇毒 (Poison)：</strong> 回合開始時受到等同層數的無視護甲傷害，並遞減 1 層。</li>
+                        <li><strong>力量 (Strength)：</strong> 每次攻擊額外增加等同力量層數的傷害。</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+/**
+ * ============================================================================
+ * 《星界牌局：秘法重鑄 (Astral Deck: Arcane Reforge)》
+ * 策略卡牌構築肉鴿 (Roguelike Deckbuilder) 完整單檔引擎
+ * ============================================================================
+ */
+
+// --- 1. Web Audio API 純程式合成音效引擎 ---
+class AstralSound {
+    constructor() {
+        this.ctx = null;
+        this.muted = false;
+    }
+
+    init() {
+        if (!this.ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) this.ctx = new AudioCtx();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+    }
+
+    toggleMute() {
+        this.muted = !this.muted;
+        return this.muted;
+    }
+
+    playCardDraw() {
+        if (this.muted || !this.ctx) return;
+        try {
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(380, now);
+            osc.frequency.exponentialRampToValueAtTime(640, now + 0.06);
+            gain.gain.setValueAtTime(0.07, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.06);
+        } catch (e) {}
+    }
+
+    playAttack() {
+        if (this.muted || !this.ctx) return;
+        try {
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(420, now);
+            osc.frequency.exponentialRampToValueAtTime(90, now + 0.16);
+            gain.gain.setValueAtTime(0.16, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.16);
+        } catch (e) {}
+    }
+
+    playShield() {
+        if (this.muted || !this.ctx) return;
+        try {
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(280, now);
+            osc.frequency.exponentialRampToValueAtTime(560, now + 0.18);
+            gain.gain.setValueAtTime(0.15, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.18);
+        } catch (e) {}
+    }
+
+    playPoison() {
+        if (this.muted || !this.ctx) return;
+        try {
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(720, now);
+            osc.frequency.linearRampToValueAtTime(440, now + 0.15);
+            gain.gain.setValueAtTime(0.12, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.15);
+        } catch (e) {}
+    }
+
+    playPower() {
+        if (this.muted || !this.ctx) return;
+        try {
+            const now = this.ctx.currentTime;
+            [440, 554.37, 659.25, 880].forEach((f, idx) => {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(f, now + idx * 0.05);
+                gain.gain.setValueAtTime(0.12, now + idx * 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.25);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now + idx * 0.05);
+                osc.stop(now + idx * 0.05 + 0.25);
+            });
+        } catch (e) {}
+    }
+
+    playHurt() {
+        if (this.muted || !this.ctx) return;
+        try {
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(160, now);
+            osc.frequency.linearRampToValueAtTime(65, now + 0.22);
+            gain.gain.setValueAtTime(0.22, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.22);
+        } catch (e) {}
+    }
+}
+
+const sfx = new AstralSound();
+
+// --- 2. 卡牌資料庫（22 張差異化卡牌，皆支援 + 鍛造升級） ---
+const CARD_DB = {
+    // === 基礎與星辰術士牌 ===
+    arcane_missile: {
+        id: 'arcane_missile',
+        name: '奧術飛彈',
+        type: 'attack',
+        target: 'single',
+        cost: 1,
+        upgCost: 1,
+        icon: '🌠',
+        rarity: 'basic',
+        desc: (u) => `造成 <strong class="text-rose-300">${u ? 9 : 6}</strong> 點傷害。`,
+        play: (ctx, u) => {
+            ctx.dealDamage(ctx.target, u ? 9 : 6);
+        }
+    },
+    astral_shield: {
+        id: 'astral_shield',
+        name: '星界護盾',
+        type: 'skill',
+        target: 'self',
+        cost: 1,
+        upgCost: 1,
+        icon: '🛡️',
+        rarity: 'basic',
+        desc: (u) => `獲得 <strong class="text-sky-300">${u ? 8 : 5}</strong> 點護甲。`,
+        play: (ctx, u) => {
+            ctx.gainBlock(u ? 8 : 5);
+        }
+    },
+    focus_meditation: {
+        id: 'focus_meditation',
+        name: '聚能冥想',
+        type: 'skill',
+        target: 'self',
+        cost: 1,
+        upgCost: 0,
+        icon: '🔮',
+        rarity: 'common',
+        desc: (u) => `抽 <strong class="text-cyan-300">${u ? 3 : 2}</strong> 張牌，並獲得 <strong class="text-sky-300">3</strong> 點護甲。`,
+        play: (ctx, u) => {
+            ctx.drawCards(u ? 3 : 2);
+            ctx.gainBlock(3);
+        }
+    },
+    starfall_nova: {
+        id: 'starfall_nova',
+        name: '星隕新星',
+        type: 'attack',
+        target: 'all',
+        cost: 2,
+        upgCost: 2,
+        icon: '☄️',
+        rarity: 'rare',
+        desc: (u) => `對所有敵人造成 <strong class="text-rose-300">${u ? 14 : 10}</strong> 點傷害並施加 <strong class="text-amber-300">1</strong> 層易傷。`,
+        play: (ctx, u) => {
+            ctx.enemies.forEach(e => {
+                ctx.dealDamage(e, u ? 14 : 10);
+                ctx.applyStatus(e, 'vulnerable', 1);
+            });
+        }
+    },
+    mana_surge: {
+        id: 'mana_surge',
+        name: '秘法湧流',
+        type: 'skill',
+        target: 'self',
+        cost: 0,
+        upgCost: 0,
+        icon: '⚡',
+        rarity: 'rare',
+        desc: (u) => `獲得 <strong class="text-cyan-300">${u ? 2 : 1}</strong> 點能量，並抽 <strong class="text-cyan-300">1</strong> 張牌。`,
+        play: (ctx, u) => {
+            ctx.gainEnergy(u ? 2 : 1);
+            ctx.drawCards(1);
+        }
+    },
+    astral_form: {
+        id: 'astral_form',
+        name: '星靈型態',
+        type: 'power',
+        target: 'self',
+        cost: 2,
+        upgCost: 1,
+        icon: '🌌',
+        rarity: 'epic',
+        exhaust: true,
+        desc: (u) => `<span class="text-purple-300">[能力]</span> 獲得 <strong class="text-amber-300">${u ? 3 : 2}</strong> 點力量，且星能共鳴全體轟炸傷害 <strong>+5</strong>。`,
+        play: (ctx, u) => {
+            ctx.applyStatus(ctx.player, 'strength', u ? 3 : 2);
+            ctx.player.astralBonus += 5;
+        }
+    },
+
+    // === 暗影刺客牌 ===
+    poison_dagger: {
+        id: 'poison_dagger',
+        name: '淬毒匕首',
+        type: 'attack',
+        target: 'single',
+        cost: 1,
+        upgCost: 1,
+        icon: '🗡️',
+        rarity: 'basic',
+        desc: (u) => `造成 <strong class="text-rose-300">${u ? 6 : 4}</strong> 點傷害，並施加 <strong class="text-emerald-300">${u ? 4 : 3}</strong> 層劇毒。`,
+        play: (ctx, u) => {
+            ctx.dealDamage(ctx.target, u ? 6 : 4);
+            ctx.applyStatus(ctx.target, 'poison', u ? 4 : 3);
+        }
+    },
+    smoke_evade: {
+        id: 'smoke_evade',
+        name: '煙霧閃避',
+        type: 'skill',
+        target: 'self',
+        cost: 1,
+        upgCost: 1,
+        icon: '💨',
+        rarity: 'basic',
+        desc: (u) => `獲得 <strong class="text-sky-300">${u ? 7 : 5}</strong> 點護甲，並抽 <strong class="text-cyan-300">1</strong> 張牌。`,
+        play: (ctx, u) => {
+            ctx.gainBlock(u ? 7 : 5);
+            ctx.drawCards(1);
+        }
+    },
+    shadow_strike: {
+        id: 'shadow_strike',
+        name: '暗影突襲',
+        type: 'attack',
+        target: 'single',
+        cost: 1,
+        upgCost: 1,
+        icon: '🌑',
+        rarity: 'common',
+        desc: (u) => `造成 <strong class="text-rose-300">${u ? 9 : 7}</strong> 點傷害；若目標已中毒，額外再造成 <strong class="text-emerald-300">${u ? 9 : 6}</strong> 點傷害！`,
+        play: (ctx, u) => {
+            ctx.dealDamage(ctx.target, u ? 9 : 7);
+            if ((ctx.target.statuses.poison || 0) > 0) {
+                ctx.dealDamage(ctx.target, u ? 9 : 6);
+            }
+        }
+    },
+    venom_catalyst: {
+        id: 'venom_catalyst',
+        name: '劇毒催化',
+        type: 'skill',
+        target: 'single',
+        cost: 1,
+        upgCost: 1,
+        icon: '🧪',
+        rarity: 'rare',
+        desc: (u) => `使目標的劇毒層數 <strong class="text-emerald-300">${u ? '翻倍並 +3' : '直接翻倍'}</strong>！`,
+        play: (ctx, u) => {
+            const cur = ctx.target.statuses.poison || 0;
+            const add = cur + (u ? 3 : 0);
+            if (add > 0) ctx.applyStatus(ctx.target, 'poison', add);
+        }
+    },
+    blade_flurry: {
+        id: 'blade_flurry',
+        name: '影舞連斬',
+        type: 'attack',
+        target: 'single',
+        cost: 1,
+        upgCost: 1,
+        icon: '⚔️',
+        rarity: 'common',
+        desc: (u) => `連續攻擊 <strong class="text-rose-300">${u ? 4 : 3}</strong> 次，每次造成 <strong class="text-rose-300">3</strong> 點傷害。`,
+        play: (ctx, u) => {
+            const hits = u ? 4 : 3;
+            for (let i = 0; i < hits; i++) {
+                ctx.dealDamage(ctx.target, 3);
+            }
+        }
+    },
+    noxious_fumes: {
+        id: 'noxious_fumes',
+        name: '瘴氣領域',
+        type: 'power',
+        target: 'self',
+        cost: 1,
+        upgCost: 1,
+        icon: '☠️',
+        rarity: 'epic',
+        exhaust: true,
+        desc: (u) => `<span class="text-purple-300">[能力]</span> 每回合開始時，自動對所有敵人施加 <strong class="text-emerald-300">${u ? 3 : 2}</strong> 層劇毒。`,
+        play: (ctx, u) => {
+            ctx.player.noxiousFumes += (u ? 3 : 2);
+        }
+    },
+
+    // === 鋼鐵重裝牌 ===
+    heavy_shield: {
+        id: 'heavy_shield',
+        name: '重盾格擋',
+        type: 'skill',
+        target: 'self',
+        cost: 1,
+        upgCost: 1,
+        icon: '🏰',
+        rarity: 'basic',
+        desc: (u) => `獲得 <strong class="text-sky-300">${u ? 10 : 7}</strong> 點護甲。`,
+        play: (ctx, u) => {
+            ctx.gainBlock(u ? 10 : 7);
+        }
+    },
+    iron_bash: {
+        id: 'iron_bash',
+        name: '鐵壁衝撞',
+        type: 'attack',
+        target: 'single',
+        cost: 1,
+        upgCost: 0,
+        icon: '🔨',
+        rarity: 'basic',
+        desc: (u) => `造成等同於你當前 <strong class="text-sky-300">護甲值</strong> 的傷害（至少 <strong class="text-rose-300">${u ? 7 : 5}</strong> 點）。`,
+        play: (ctx, u) => {
+            const dmg = Math.max(u ? 7 : 5, ctx.player.block);
+            ctx.dealDamage(ctx.target, dmg);
+        }
+    },
+    war_cry: {
+        id: 'war_cry',
+        name: '鋼鐵戰吼',
+        type: 'skill',
+        target: 'all',
+        cost: 1,
+        upgCost: 1,
+        icon: '📯',
+        rarity: 'common',
+        desc: (u) => `獲得 <strong class="text-amber-300">${u ? 2 : 1}</strong> 點力量，並對全體敵人施加 <strong class="text-purple-300">${u ? 2 : 1}</strong> 層虛弱。`,
+        play: (ctx, u) => {
+            ctx.applyStatus(ctx.player, 'strength', u ? 2 : 1);
+            ctx.enemies.forEach(e => ctx.applyStatus(e, 'weak', u ? 2 : 1));
+        }
+    },
+    fortress_wall: {
+        id: 'fortress_wall',
+        name: '絕對壁壘',
+        type: 'skill',
+        target: 'self',
+        cost: 2,
+        upgCost: 2,
+        icon: '🧱',
+        rarity: 'rare',
+        desc: (u) => `獲得 <strong class="text-sky-300">${u ? 20 : 15}</strong> 點護甲。`,
+        play: (ctx, u) => {
+            ctx.gainBlock(u ? 20 : 15);
+        }
+    },
+    meteor_slam: {
+        id: 'meteor_slam',
+        name: '裂地重擊',
+        type: 'attack',
+        target: 'single',
+        cost: 2,
+        upgCost: 2,
+        icon: '💥',
+        rarity: 'common',
+        desc: (u) => `造成 <strong class="text-rose-300">${u ? 18 : 13}</strong> 點傷害，並施加 <strong class="text-amber-300">2</strong> 層易傷。`,
+        play: (ctx, u) => {
+            ctx.dealDamage(ctx.target, u ? 18 : 13);
+            ctx.applyStatus(ctx.target, 'vulnerable', 2);
+        }
+    },
+    juggernaut_core: {
+        id: 'juggernaut_core',
+        name: '勢不可擋',
+        type: 'power',
+        target: 'self',
+        cost: 2,
+        upgCost: 1,
+        icon: '⚙️',
+        rarity: 'epic',
+        exhaust: true,
+        desc: (u) => `<span class="text-purple-300">[能力]</span> 每當你獲得護甲時，自動對隨機敵人造成 <strong class="text-rose-300">${u ? 6 : 4}</strong> 點反震傷害。`,
+        play: (ctx, u) => {
+            ctx.player.juggernautDmg += (u ? 6 : 4);
+        }
+    },
+
+    // === 通用強力中立牌 ===
+    cosmic_ray: {
+        id: 'cosmic_ray',
+        name: '星辰射線',
+        type: 'attack',
+        target: 'single',
+        cost: 0,
+        upgCost: 0,
+        icon: '✨',
+        rarity: 'common',
+        desc: (u) => `造成 <strong class="text-rose-300">${u ? 6 : 4}</strong> 點傷害並抽 <strong class="text-cyan-300">1</strong> 張牌。`,
+        play: (ctx, u) => {
+            ctx.dealDamage(ctx.target, u ? 6 : 4);
+            ctx.drawCards(1);
+        }
+    },
+    weaken_hex: {
+        id: 'weaken_hex',
+        name: '星蝕詛咒',
+        type: 'skill',
+        target: 'single',
+        cost: 1,
+        upgCost: 0,
+        icon: '🧿',
+        rarity: 'common',
+        desc: (u) => `對目標施加 <strong class="text-purple-300">${u ? 3 : 2}</strong> 層虛弱與 <strong class="text-amber-300">${u ? 3 : 2}</strong> 層易傷。`,
+        play: (ctx, u) => {
+            ctx.applyStatus(ctx.target, 'weak', u ? 3 : 2);
+            ctx.applyStatus(ctx.target, 'vulnerable', u ? 3 : 2);
+        }
+    },
+    void_annihilation: {
+        id: 'void_annihilation',
+        name: '虛空湮滅',
+        type: 'attack',
+        target: 'all',
+        cost: 3,
+        upgCost: 3,
+        icon: '🕳️',
+        rarity: 'epic',
+        desc: (u) => `對所有敵人造成 <strong class="text-rose-300">${u ? 28 : 21}</strong> 點毀滅傷害！`,
+        play: (ctx, u) => {
+            ctx.enemies.forEach(e => ctx.dealDamage(e, u ? 28 : 21));
+        }
+    },
+    astral_rejuvenation: {
+        id: 'astral_rejuvenation',
+        name: '星輝再生',
+        type: 'skill',
+        target: 'self',
+        cost: 1,
+        upgCost: 1,
+        icon: '💖',
+        rarity: 'rare',
+        exhaust: true,
+        desc: (u) => `回復 <strong class="text-emerald-300">${u ? 12 : 8}</strong> 點生命，並獲得 <strong class="text-sky-300">6</strong> 點護甲。（消耗）`,
+        play: (ctx, u) => {
+            ctx.healPlayer(u ? 12 : 8);
+            ctx.gainBlock(6);
+        }
+    },
+
+    // === 新增 16 張進階流派與傳說卡牌（共 38 張） ===
+    arcane_barrage: {
+        id: 'arcane_barrage',
+        name: '秘法彈幕',
+        type: 'attack',
+        target: 'single',
+        cost: 1,
+        upgCost: 1,
+        icon: '🎆',
+        rarity: 'common',
+        desc: (u) => `造成 <strong class="text-rose-300">${u ? 5 : 4}</strong> 點傷害，加上你當前手牌每張牌額外 <strong class="text-cyan-300">+${u ? 3 : 2}</strong> 點傷害。`,
+        play: (ctx, u) => {
+            const handBonus = battleState.hand.length * (u ? 3 : 2);
+            ctx.dealDamage(ctx.target, (u ? 5 : 4) + handBonus);
+        }
+    },
+    supernova_burst: {
+        id: 'supernova_burst',
+        name: '超新星爆發',
+        type: 'attack',
+        target: 'all',
+        cost: 2,
+        upgCost: 2,
+        icon: '🌞',
+        rarity: 'rare',
+        desc: (u) => `對全體敵人造成 <strong class="text-rose-300">${u ? 12 : 9}</strong> 點傷害；本回合每已打出 1 張牌，傷害額外 <strong class="text-amber-300">+${u ? 3 : 2}</strong>。`,
+        play: (ctx, u) => {
+            const bonus = battleState.cardsPlayedThisTurn * (u ? 3 : 2);
+            ctx.enemies.forEach(e => ctx.dealDamage(e, (u ? 12 : 9) + bonus));
+        }
+    },
+    time_warp: {
+        id: 'time_warp',
+        name: '時間扭曲',
+        type: 'skill',
+        target: 'self',
+        cost: 1,
+        upgCost: 0,
+        icon: '⏳',
+        rarity: 'rare',
+        exhaust: true,
+        desc: (u) => `抽 <strong class="text-cyan-300">3</strong> 張牌並獲得 <strong class="text-cyan-300">2</strong> 點能量。（消耗）`,
+        play: (ctx, u) => {
+            ctx.drawCards(3);
+            ctx.gainEnergy(2);
+        }
+    },
+    arcane_echo: {
+        id: 'arcane_echo',
+        name: '奧術迴響',
+        type: 'power',
+        target: 'self',
+        cost: 2,
+        upgCost: 1,
+        icon: '🪞',
+        rarity: 'epic',
+        exhaust: true,
+        desc: (u) => `<span class="text-purple-300">[能力]</span> 每回合開始時額外抽 <strong class="text-cyan-300">1</strong> 張牌並獲得 <strong class="text-sky-300">${u ? 6 : 4}</strong> 點護甲。`,
+        play: (ctx, u) => {
+            ctx.player.turnStartDraw += 1;
+            ctx.player.turnStartBlock += (u ? 6 : 4);
+        }
+    },
+    corrosive_rain: {
+        id: 'corrosive_rain',
+        name: '腐蝕毒霧',
+        type: 'skill',
+        target: 'all',
+        cost: 1,
+        upgCost: 1,
+        icon: '☁️',
+        rarity: 'common',
+        desc: (u) => `對所有敵人施加 <strong class="text-emerald-300">${u ? 6 : 4}</strong> 層劇毒與 <strong class="text-purple-300">${u ? 2 : 1}</strong> 層虛弱。`,
+        play: (ctx, u) => {
+            ctx.enemies.forEach(e => {
+                ctx.applyStatus(e, 'poison', u ? 6 : 4);
+                ctx.applyStatus(e, 'weak', u ? 2 : 1);
+            });
+        }
+    },
+    phantom_step: {
+        id: 'phantom_step',
+        name: '幻影步法',
+        type: 'skill',
+        target: 'self',
+        cost: 1,
+        upgCost: 1,
+        icon: '👣',
+        rarity: 'common',
+        desc: (u) => `獲得 <strong class="text-sky-300">${u ? 11 : 8}</strong> 點護甲，並抽 <strong class="text-cyan-300">2</strong> 張牌。`,
+        play: (ctx, u) => {
+            ctx.gainBlock(u ? 11 : 8);
+            ctx.drawCards(2);
+        }
+    },
+    toxic_detonation: {
+        id: 'toxic_detonation',
+        name: '毒爆處決',
+        type: 'attack',
+        target: 'single',
+        cost: 2,
+        upgCost: 1,
+        icon: '💚',
+        rarity: 'rare',
+        desc: (u) => `造成 <strong class="text-rose-300">8</strong> 點傷害，並立即引爆目標身上等同於其 <strong class="text-emerald-300">${u ? '150%' : '100%'} 劇毒層數</strong> 的傷害！`,
+        play: (ctx, u) => {
+            const p = ctx.target.statuses.poison || 0;
+            const bonus = Math.round(p * (u ? 1.5 : 1.0));
+            ctx.dealDamage(ctx.target, 8 + bonus);
+        }
+    },
+    crimson_lotus: {
+        id: 'crimson_lotus',
+        name: '紅蓮千刃',
+        type: 'attack',
+        target: 'all',
+        cost: 2,
+        upgCost: 2,
+        icon: '🌺',
+        rarity: 'epic',
+        desc: (u) => `對所有敵人造成 <strong class="text-rose-300">${u ? 5 : 4}</strong> 點傷害共 <strong class="text-rose-300">3 次</strong>，並施加 <strong class="text-emerald-300">${u ? 4 : 3}</strong> 層劇毒。`,
+        play: (ctx, u) => {
+            for (let i = 0; i < 3; i++) {
+                ctx.enemies.forEach(e => ctx.dealDamage(e, u ? 5 : 4));
+            }
+            ctx.enemies.forEach(e => ctx.applyStatus(e, 'poison', u ? 4 : 3));
+        }
+    },
+    shield_overdrive: {
+        id: 'shield_overdrive',
+        name: '裝甲倍增',
+        type: 'skill',
+        target: 'self',
+        cost: 1,
+        upgCost: 1,
+        icon: '💠',
+        rarity: 'rare',
+        desc: (u) => `${u ? '先獲得 <strong class="text-sky-300">5</strong> 點護甲，再' : ''}使你當前的 <strong class="text-sky-300">護甲值直接翻倍</strong>！`,
+        play: (ctx, u) => {
+            if (u) ctx.gainBlock(5);
+            if (ctx.player.block > 0) {
+                ctx.gainBlock(ctx.player.block);
+            }
+        }
+    },
+    spiked_bastion: {
+        id: 'spiked_bastion',
+        name: '荊棘壁壘',
+        type: 'skill',
+        target: 'self',
+        cost: 2,
+        upgCost: 2,
+        icon: '🌵',
+        rarity: 'common',
+        desc: (u) => `獲得 <strong class="text-sky-300">${u ? 15 : 11}</strong> 點護甲，並獲得 <strong class="text-amber-300">${u ? 6 : 4}</strong> 點荊棘反傷。`,
+        play: (ctx, u) => {
+            ctx.gainBlock(u ? 15 : 11);
+            ctx.player.thorns += (u ? 6 : 4);
+        }
+    },
+    colossus_cleave: {
+        id: 'colossus_cleave',
+        name: '泰坦順劈',
+        type: 'attack',
+        target: 'all',
+        cost: 2,
+        upgCost: 2,
+        icon: '🪓',
+        rarity: 'rare',
+        desc: (u) => `獲得 <strong class="text-sky-300">${u ? 10 : 7}</strong> 點護甲，隨後對全體敵人造成等同於你 <strong class="text-rose-300">當前護甲值</strong> 的傷害！`,
+        play: (ctx, u) => {
+            ctx.gainBlock(u ? 10 : 7);
+            const dmg = Math.max(6, ctx.player.block);
+            ctx.enemies.forEach(e => ctx.dealDamage(e, dmg));
+        }
+    },
+    blood_frenzy: {
+        id: 'blood_frenzy',
+        name: '狂戰熱血',
+        type: 'skill',
+        target: 'self',
+        cost: 0,
+        upgCost: 0,
+        icon: '🩸',
+        rarity: 'rare',
+        desc: (u) => `獲得 <strong class="text-amber-300">${u ? 4 : 3}</strong> 點力量与 <strong class="text-cyan-300">1</strong> 點能量，並抽 <strong class="text-cyan-300">1</strong> 張牌。`,
+        play: (ctx, u) => {
+            ctx.applyStatus(ctx.player, 'strength', u ? 4 : 3);
+            ctx.gainEnergy(1);
+            ctx.drawCards(1);
+        }
+    },
+    celestial_blessing: {
+        id: 'celestial_blessing',
+        name: '天界恩澤',
+        type: 'skill',
+        target: 'self',
+        cost: 1,
+        upgCost: 0,
+        icon: '🌟',
+        rarity: 'rare',
+        desc: (u) => `獲得 <strong class="text-sky-300">${u ? 10 : 8}</strong> 點護甲、抽 <strong class="text-cyan-300">2</strong> 張牌並淨化自身虛弱與易傷。`,
+        play: (ctx, u) => {
+            ctx.gainBlock(u ? 10 : 8);
+            ctx.drawCards(2);
+            ctx.player.statuses.weak = 0;
+            ctx.player.statuses.vulnerable = 0;
+        }
+    },
+    void_siphon: {
+        id: 'void_siphon',
+        name: '虛空汲取',
+        type: 'attack',
+        target: 'single',
+        cost: 2,
+        upgCost: 2,
+        icon: '🦇',
+        rarity: 'epic',
+        exhaust: true,
+        desc: (u) => `造成 <strong class="text-rose-300">${u ? 16 : 12}</strong> 點傷害，並回復 <strong class="text-emerald-300">${u ? 10 : 7}</strong> 點生命值。（消耗）`,
+        play: (ctx, u) => {
+            ctx.dealDamage(ctx.target, u ? 16 : 12);
+            ctx.healPlayer(u ? 10 : 7);
+        }
+    },
+    singularity_collapse: {
+        id: 'singularity_collapse',
+        name: '奇點坍縮',
+        type: 'attack',
+        target: 'single',
+        cost: 2,
+        upgCost: 2,
+        icon: '🌀',
+        rarity: 'epic',
+        desc: (u) => `造成 <strong class="text-rose-300">${u ? 20 : 15}</strong> 點傷害；若目標帶有任一負面狀態，返還 <strong class="text-cyan-300">2 點能量</strong> 並抽 1 張牌！`,
+        play: (ctx, u) => {
+            const hasDebuff = (ctx.target.statuses.poison > 0) || (ctx.target.statuses.vulnerable > 0) || (ctx.target.statuses.weak > 0);
+            ctx.dealDamage(ctx.target, u ? 20 : 15);
+            if (hasDebuff) {
+                ctx.gainEnergy(2);
+                ctx.drawCards(1);
+            }
+        }
+    },
+    omega_protocol: {
+        id: 'omega_protocol',
+        name: '終焉星神協議',
+        type: 'power',
+        target: 'self',
+        cost: 3,
+        upgCost: 2,
+        icon: '👑',
+        rarity: 'epic',
+        exhaust: true,
+        desc: (u) => `<span class="text-purple-300">[能力]</span> 立即獲得 <strong class="text-amber-300">${u ? 5 : 4}</strong> 點力量、<strong class="text-sky-300">15</strong> 點護甲，且每回合額外抽 1 張牌。`,
+        play: (ctx, u) => {
+            ctx.applyStatus(ctx.player, 'strength', u ? 5 : 4);
+            ctx.gainBlock(15);
+            ctx.player.turnStartDraw += 1;
+        }
+    }
+};
+
+// --- 3. 遺物資料庫（9 件星界遺物） ---
+const RELIC_DB = {
+    astral_prism: {
+        id: 'astral_prism',
+        name: '星界稜鏡',
+        icon: '🔷',
+        desc: '星辰術士專屬：每打出 3 張牌自動對全體敵人造成 7 點奧術轟炸。'
+    },
+    viper_fang: {
+        id: 'viper_fang',
+        name: '劇毒蛇牙',
+        icon: '🐍',
+        desc: '暗影刺客專屬：每次施加劇毒時額外 +1 層，且對中毒敵人的攻擊傷害 +25%。'
+    },
+    aegis_core: {
+        id: 'aegis_core',
+        name: '神盾核心',
+        icon: '💠',
+        desc: '鋼鐵重裝專屬：回合結束時保留 50% 護甲不會消失。'
+    },
+    perpetual_engine: {
+        id: 'perpetual_engine',
+        name: '永動核心',
+        icon: '⚛️',
+        desc: '每回合開始時額外抽 1 張牌。'
+    },
+    vampire_fang: {
+        id: 'vampire_fang',
+        name: '吸血獠牙',
+        icon: '🧛',
+        desc: '每當你擊殺一名敵人時，回復 6 點生命值。'
+    },
+    chrono_watch: {
+        id: 'chrono_watch',
+        name: '符文懷表',
+        icon: '⏱️',
+        desc: '每場戰鬥的第 1 回合額外獲得 +1 點能量。'
+    },
+    vajra_orb: {
+        id: 'vajra_orb',
+        name: '金剛星珠',
+        icon: '🔥',
+        desc: '每場戰鬥開始時，直接獲得 2 點力量。'
+    },
+    orichalcum_plate: {
+        id: 'orichalcum_plate',
+        name: '山銅裝甲',
+        icon: '🛡️',
+        desc: '回合結束時若你沒有護甲，自動獲得 6 點護甲。'
+    },
+    star_magnet: {
+        id: 'star_magnet',
+        name: '星塵磁石',
+        icon: '🧲',
+        desc: '戰鬥勝利獲得的星塵（金幣）增加 35%。'
+    }
+};
+
+// --- 4. 三大職業開局設定 ---
+const CLASSES = {
+    mage: {
+        id: 'mage',
+        name: '星辰術士',
+        enName: 'ASTRAL MAGE',
+        icon: '🔮',
+        color: 'text-cyan-400',
+        border: 'border-cyan-500/60',
+        maxHp: 75,
+        energy: 3,
+        starterRelic: 'astral_prism',
+        passiveTitle: '星能共鳴',
+        passiveDesc: '每打出 3 張牌自動對全體敵人造成 7 點奧術轟炸，擅長抽牌連發與全體法術。',
+        deck: [
+            'arcane_missile', 'arcane_missile', 'arcane_missile', 'arcane_missile',
+            'astral_shield', 'astral_shield', 'astral_shield',
+            'focus_meditation', 'starfall_nova', 'mana_surge'
+        ]
+    },
+    assassin: {
+        id: 'assassin',
+        name: '暗影刺客',
+        enName: 'SHADOW ASSASSIN',
+        icon: '🗡️',
+        color: 'text-emerald-400',
+        border: 'border-emerald-500/60',
+        maxHp: 65,
+        energy: 3,
+        starterRelic: 'viper_fang',
+        passiveTitle: '劇毒與連擊',
+        passiveDesc: '每次施毒額外 +1 層，且對中毒敵人造成 +25% 攻擊傷害，擅長疊毒爆發與多段連斬。',
+        deck: [
+            'poison_dagger', 'poison_dagger', 'poison_dagger',
+            'smoke_evade', 'smoke_evade', 'smoke_evade',
+            'shadow_strike', 'shadow_strike', 'blade_flurry', 'venom_catalyst'
+        ]
+    },
+    guardian: {
+        id: 'guardian',
+        name: '鋼鐵重裝',
+        enName: 'IRON JUGGERNAUT',
+        icon: '🛡️',
+        color: 'text-amber-400',
+        border: 'border-amber-500/60',
+        maxHp: 90,
+        energy: 3,
+        starterRelic: 'aegis_core',
+        passiveTitle: '護甲反震',
+        passiveDesc: '回合結束保留 50% 護甲不消散，並能將高昂護甲直接轉化為重擊傷害。',
+        deck: [
+            'heavy_shield', 'heavy_shield', 'heavy_shield', 'heavy_shield',
+            'iron_bash', 'iron_bash', 'meteor_slam',
+            'war_cry', 'fortress_wall', 'cosmic_ray'
+        ]
+    }
+};
+
+// --- 5. 全域遊戲狀態 ---
+let selectedClassKey = 'mage';
+let runState = null;
+let battleState = null;
+
+function createNewRun(classKey) {
+    const cls = CLASSES[classKey];
+    const deck = cls.deck.map((cardId, idx) => ({
+        uid: `card_${Date.now()}_${idx}_${Math.random()}`,
+        id: cardId,
+        upgraded: false
+    }));
+
+    return {
+        classKey,
+        classCfg: cls,
+        hp: cls.maxHp,
+        maxHp: cls.maxHp,
+        maxEnergy: cls.energy,
+        gold: 85,
+        floor: 0, // 0 代表尚未進入第1層
+        currentNodeId: null,
+        deck,
+        relics: [cls.starterRelic],
+        map: generateTowerMap()
+    };
+}
+
+// --- 6. 15 層雙章節史詩爬塔地圖生成器 ---
+function generateTowerMap() {
+    // 15 層史詩長線：
+    // 第 1~7 層：星塔下層（第 8 層由【深淵星龍 • 瓦爾基里】鎮守，擊敗後全滿回血並賜予遺物，進入星塔上層！）
+    // 第 9~14 層：星塔上層高難度試煉（第 15 層由【吞星巨像 • 奧米伽】鎮守）
+    const floorTemplates = [
+        ['battle', 'battle'],
+        ['battle', 'event', 'battle'],
+        ['battle', 'elite', 'event'],
+        ['rest', 'event', 'rest'],
+        ['battle', 'elite', 'battle'],
+        ['event', 'elite', 'rest'],
+        ['rest', 'rest'],
+        ['midboss'],
+        ['battle', 'event', 'battle'],
+        ['elite', 'battle', 'event'],
+        ['rest', 'event', 'rest'],
+        ['battle', 'elite', 'elite'],
+        ['event', 'rest', 'battle'],
+        ['rest', 'rest'],
+        ['boss']
+    ];
+
+    const map = [];
+    for (let f = 0; f < floorTemplates.length; f++) {
+        const types = floorTemplates[f];
+        const nodes = types.map((type, idx) => ({
+            id: `f${f}_n${idx}`,
+            floor: f + 1,
+            index: idx,
+            type,
+            next: []
+        }));
+        map.push(nodes);
+    }
+
+    // 建立連通路徑（保證每個節點至少有一條向前的路，且每個後層節點都可抵達）
+    for (let f = 0; f < map.length - 1; f++) {
+        const curLayer = map[f];
+        const nextLayer = map[f + 1];
+
+        curLayer.forEach((node, idx) => {
+            if (nextLayer.length === 1) {
+                node.next.push(nextLayer[0].id);
+            } else {
+                const ratio = idx / Math.max(1, curLayer.length - 1);
+                const targetIdx = Math.round(ratio * (nextLayer.length - 1));
+                node.next.push(nextLayer[targetIdx].id);
+                if (Math.random() < 0.55) {
+                    const alt = targetIdx === 0 ? 1 : targetIdx - 1;
+                    if (nextLayer[alt] && !node.next.includes(nextLayer[alt].id)) {
+                        node.next.push(nextLayer[alt].id);
+                    }
+                }
+            }
+        });
+
+        // 確保下一層每個節點都有前驅
+        nextLayer.forEach((nNode, nIdx) => {
+            const hasIncoming = curLayer.some(c => c.next.includes(nNode.id));
+            if (!hasIncoming) {
+                const fallback = curLayer[Math.min(curLayer.length - 1, nIdx)];
+                fallback.next.push(nNode.id);
+            }
+        });
+    }
+
+    return map;
+}
+
+// --- 7. 敵人資料庫與意圖系統（含第 8 層守門首領與上層強敵） ---
+function createEnemyInstance(templateId, floorScale = 1) {
+    const templates = {
+        void_slime: {
+            id: 'void_slime',
+            name: '虛空史萊姆',
+            icon: '🟣',
+            maxHp: Math.round(32 + floorScale * 4.5),
+            intents: [
+                { type: 'attack', val: 7 + floorScale, label: '腐蝕衝撞' },
+                { type: 'debuff_poison', val: 3, label: '噴吐毒液' },
+                { type: 'attack_block', val: 6 + floorScale, block: 6, label: '凝膠硬化' }
+            ]
+        },
+        sentinel_golem: {
+            id: 'sentinel_golem',
+            name: '哨兵傀儡',
+            icon: '🗿',
+            maxHp: Math.round(42 + floorScale * 5.5),
+            intents: [
+                { type: 'block_buff', block: 10, str: 2, label: '星核充能' },
+                { type: 'attack', val: 11 + Math.round(floorScale * 1.6), label: '重拳粉碎' },
+                { type: 'attack', val: 9 + floorScale, label: '激光掃射' }
+            ]
+        },
+        twin_hound: {
+            id: 'twin_hound',
+            name: '星界獵犬',
+            icon: '🐺',
+            maxHp: Math.round(28 + floorScale * 4),
+            intents: [
+                { type: 'multi_attack', val: 4 + Math.floor(floorScale / 2.5), hits: 2, label: '雙重撕咬' },
+                { type: 'debuff_vuln', val: 2, label: '破甲咆哮' },
+                { type: 'attack', val: 8 + floorScale, label: '暗影撲擊' }
+            ]
+        },
+        nebula_wraith: {
+            id: 'nebula_wraith',
+            name: '星雲幽魂',
+            icon: '👻',
+            maxHp: Math.round(48 + floorScale * 5),
+            intents: [
+                { type: 'debuff_weak_vuln', val: 2, label: '靈魂哀嚎' },
+                { type: 'attack', val: 12 + Math.round(floorScale * 1.4), label: '幽冥貫穿' },
+                { type: 'debuff_poison', val: 5, label: '死氣侵蝕' }
+            ]
+        },
+        chrono_knight: {
+            id: 'chrono_knight',
+            name: '時空重騎兵',
+            icon: '🏇',
+            maxHp: Math.round(58 + floorScale * 5.5),
+            intents: [
+                { type: 'attack_block', val: 10 + floorScale, block: 10, label: '聖盾衝鋒' },
+                { type: 'multi_attack', val: 6 + Math.floor(floorScale / 3), hits: 2, label: '時空雙斬' },
+                { type: 'block_buff', block: 12, str: 3, label: '法則強化' }
+            ]
+        },
+        astral_inquisitor: {
+            id: 'astral_inquisitor',
+            name: '星界審判官',
+            icon: '⚖️',
+            isElite: true,
+            maxHp: Math.round(82 + floorScale * 7.5),
+            intents: [
+                { type: 'debuff_weak_vuln', val: 2, label: '星律制裁' },
+                { type: 'multi_attack', val: 5 + Math.floor(floorScale / 2.5), hits: 3, label: '審判連斬' },
+                { type: 'block_buff', block: 14, str: 3, label: '聖光庇護' },
+                { type: 'attack', val: 16 + Math.round(floorScale * 1.6), label: '天罰審判' }
+            ]
+        },
+        void_archon: {
+            id: 'void_archon',
+            name: '虛空執政官',
+            icon: '👁️‍🗨️',
+            isElite: true,
+            maxHp: Math.round(98 + floorScale * 8),
+            intents: [
+                { type: 'block_buff', block: 16, str: 3, label: '虛空障壁' },
+                { type: 'debuff_poison', val: 6, label: '深淵凋零' },
+                { type: 'multi_attack', val: 8 + Math.floor(floorScale / 3), hits: 2, label: '雙星湮滅' },
+                { type: 'attack', val: 20 + Math.round(floorScale * 1.5), label: '次元崩裂' }
+            ]
+        },
+        abyssal_valkyrie: {
+            id: 'abyssal_valkyrie',
+            name: '第8層首領 • 深淵星龍瓦爾基里',
+            icon: '🐉',
+            isBoss: true,
+            isMidBoss: true,
+            maxHp: 210,
+            intents: [
+                { type: 'attack_block', val: 14, block: 12, label: '龍鱗展開' },
+                { type: 'multi_attack', val: 6, hits: 3, label: '星焰三連息' },
+                { type: 'debuff_weak_vuln', val: 2, label: '龍威震懾' },
+                { type: 'attack', val: 22, label: '隕星俯衝' }
+            ]
+        },
+        star_eater_colossus: {
+            id: 'star_eater_colossus',
+            name: '第15層終焉首領 • 吞星巨像奧米伽',
+            icon: '👾',
+            isBoss: true,
+            maxHp: 380,
+            intents: [
+                { type: 'block_buff', block: 20, str: 4, label: '吞噬星輝' },
+                { type: 'multi_attack', val: 8, hits: 3, label: '星隕連轟' },
+                { type: 'debuff_weak_vuln', val: 2, label: '重力坍縮' },
+                { type: 'attack', val: 32, label: '終焉超新星' }
+            ]
+        }
+    };
+
+    const tpl = templates[templateId];
+    return {
+        uid: `enemy_${Date.now()}_${Math.random()}`,
+        ...tpl,
+        hp: tpl.maxHp,
+        block: 0,
+        statuses: {},
+        intentIdx: 0,
+        currentIntent: { ...tpl.intents[0] }
+    };
+}
+
+function generateEncounter(nodeType, floor) {
+    if (nodeType === 'boss') {
+        return [createEnemyInstance('star_eater_colossus', floor)];
+    }
+    if (nodeType === 'midboss') {
+        return [createEnemyInstance('abyssal_valkyrie', floor)];
+    }
+    if (nodeType === 'elite') {
+        if (floor >= 9) {
+            return [
+                createEnemyInstance('void_archon', floor),
+                createEnemyInstance('nebula_wraith', floor)
+            ];
+        }
+        return [
+            createEnemyInstance('astral_inquisitor', floor),
+            createEnemyInstance('twin_hound', floor)
+        ];
+    }
+    // 普通戰鬥隨樓層組合
+    if (floor <= 3) {
+        return Math.random() < 0.5
+            ? [createEnemyInstance('void_slime', floor), createEnemyInstance('twin_hound', floor)]
+            : [createEnemyInstance('sentinel_golem', floor)];
+    } else if (floor <= 8) {
+        const pools = [
+            ['sentinel_golem', 'void_slime'],
+            ['nebula_wraith', 'twin_hound'],
+            ['sentinel_golem', 'twin_hound']
+        ];
+        const chosen = pools[Math.floor(Math.random() * pools.length)];
+        return chosen.map(id => createEnemyInstance(id, floor));
+    } else {
+        // 第 9~14 層高階星塔遭遇戰
+        const pools = [
+            ['chrono_knight', 'nebula_wraith'],
+            ['chrono_knight', 'twin_hound'],
+            ['sentinel_golem', 'nebula_wraith'],
+            ['twin_hound', 'twin_hound', 'void_slime']
+        ];
+        const chosen = pools[Math.floor(Math.random() * pools.length)];
+        return chosen.map(id => createEnemyInstance(id, floor));
+    }
+}
+
+// --- 8. 畫面切換與頂部狀態更新 ---
+function showScreen(screenId) {
+    const screens = ['screen-title', 'screen-map', 'screen-battle', 'screen-reward', 'screen-rest', 'screen-event', 'screen-end'];
+    screens.forEach(id => {
+        const el = document.getElementById(id);
+        if (id === screenId) el.classList.remove('hidden');
+        else el.classList.add('hidden');
+    });
+
+    const topBar = document.getElementById('top-bar');
+    if (screenId === 'screen-title') {
+        topBar.classList.add('hidden');
+    } else {
+        topBar.classList.remove('hidden');
+        updateTopBar();
+    }
+}
+
+function updateTopBar() {
+    if (!runState) return;
+    document.getElementById('top-class-icon').textContent = runState.classCfg.icon;
+    document.getElementById('top-class-name').textContent = runState.classCfg.name;
+    document.getElementById('top-floor-text').textContent = `星塔第 ${Math.max(1, runState.floor)} / 15 層`;
+    document.getElementById('top-hp-text').textContent = `${runState.hp} / ${runState.maxHp}`;
+    document.getElementById('top-gold-text').textContent = runState.gold;
+    document.getElementById('top-deck-count').textContent = runState.deck.length;
+
+    const relicContainer = document.getElementById('top-relics');
+    relicContainer.innerHTML = '';
+    runState.relics.forEach(rId => {
+        const r = RELIC_DB[rId];
+        if (!r) return;
+        const badge = document.createElement('div');
+        badge.className = 'px-2 py-1 rounded-xl bg-slate-900/95 border border-purple-500/40 text-xs flex items-center gap-1 cursor-help shadow';
+        badge.title = `${r.name}：${r.desc}`;
+        badge.innerHTML = `<span>${r.icon}</span><span class="hidden md:inline text-[11px] font-bold text-slate-200">${r.name}</span>`;
+        relicContainer.appendChild(badge);
+    });
+}
+
+// --- 9. 標題畫面職業渲染 ---
+function renderTitleClasses() {
+    const grid = document.getElementById('title-class-grid');
+    grid.innerHTML = '';
+
+    Object.values(CLASSES).forEach(cls => {
+        const isSelected = cls.id === selectedClassKey;
+        const starterRelic = RELIC_DB[cls.starterRelic];
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = `p-5 rounded-3xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between bg-slate-900/90 ${
+            isSelected ? `${cls.border} ring-2 ring-cyan-300/60 scale-[1.02] shadow-2xl` : 'border-slate-800 hover:border-slate-600'
+        }`;
+
+        card.innerHTML = `
+            <div>
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-xs font-black px-2.5 py-0.5 rounded-full bg-slate-950 border border-slate-700 ${cls.color}">
+                        ❤️ ${cls.maxHp} HP • ⚡ ${cls.energy} 能量
+                    </span>
+                    <span class="text-[10px] font-mono text-slate-500">${cls.enName}</span>
+                </div>
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-2xl shadow-inner">
+                        ${cls.icon}
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-black text-white">${cls.name}</h3>
+                        <div class="text-xs font-bold text-amber-300">特性：${cls.passiveTitle}</div>
+                    </div>
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed mb-4">${cls.passiveDesc}</p>
+            </div>
+            <div class="p-3 rounded-2xl bg-slate-950/85 border border-slate-800/90">
+                <div class="text-[11px] font-bold text-purple-300 mb-0.5">初始遺物：${starterRelic.icon} ${starterRelic.name}</div>
+                <div class="text-[11px] text-slate-400 leading-snug">${starterRelic.desc}</div>
+            </div>
+        `;
+
+        card.addEventListener('click', () => {
+            sfx.init();
+            sfx.playCardDraw();
+            selectedClassKey = cls.id;
+            renderTitleClasses();
+        });
+
+        grid.appendChild(card);
+    });
+}
+
+// --- 10. 爬塔路線圖渲染與節點選擇 ---
+function renderMap() {
+    showScreen('screen-map');
+    const container = document.getElementById('map-nodes-container');
+    const svg = document.getElementById('map-lines-svg');
+    container.innerHTML = '';
+    svg.innerHTML = '';
+
+    // 判斷哪些節點目前可點擊
+    let availableNodeIds = new Set();
+    if (runState.floor === 0) {
+        runState.map[0].forEach(n => availableNodeIds.add(n.id));
+    } else {
+        const curLayer = runState.map[runState.floor - 1];
+        const curNode = curLayer.find(n => n.id === runState.currentNodeId);
+        if (curNode) {
+            curNode.next.forEach(id => availableNodeIds.add(id));
+        }
+    }
+
+    const typeMeta = {
+        battle: { icon: '⚔️', label: '戰鬥', color: 'border-slate-500 bg-slate-900 text-white' },
+        elite: { icon: '💀', label: '菁英', color: 'border-rose-500 bg-rose-950/80 text-rose-200' },
+        rest: { icon: '🔥', label: '營火', color: 'border-amber-500 bg-amber-950/80 text-amber-200' },
+        event: { icon: '❓', label: '黑市', color: 'border-cyan-500 bg-cyan-950/80 text-cyan-200' },
+        midboss: { icon: '👹', label: '守門王', color: 'border-fuchsia-500 bg-fuchsia-950/90 text-fuchsia-200' },
+        boss: { icon: '👑', label: '終焉王', color: 'border-purple-500 bg-purple-950/90 text-purple-200' }
+    };
+
+    const nodeDomMap = new Map();
+    let activeColumnEl = null;
+
+    runState.map.forEach((layer, fIdx) => {
+        const col = document.createElement('div');
+        col.className = 'flex flex-col justify-around items-center h-full gap-4 z-10';
+
+        const floorHeader = document.createElement('div');
+        floorHeader.className = 'text-[10px] font-mono text-slate-500 font-bold';
+        floorHeader.textContent = `F${fIdx + 1}`;
+        col.appendChild(floorHeader);
+
+        layer.forEach(node => {
+            const meta = typeMeta[node.type];
+            const isAvail = availableNodeIds.has(node.id);
+            const isCurrent = runState.currentNodeId === node.id;
+            if (isAvail) activeColumnEl = col;
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.disabled = !isAvail;
+            btn.className = `w-12 h-12 sm:w-14 sm:h-14 rounded-2xl border-2 flex flex-col items-center justify-center transition-all relative ${meta.color} ${
+                isAvail
+                    ? 'ring-4 ring-cyan-400/50 scale-110 cursor-pointer animate-pulse shadow-[0_0_20px_rgba(56,189,248,0.65)]'
+                    : isCurrent
+                    ? 'ring-2 ring-emerald-400 opacity-95'
+                    : 'opacity-45 cursor-not-allowed'
+            }`;
+            btn.innerHTML = `
+                <span class="text-lg sm:text-xl leading-none">${meta.icon}</span>
+                <span class="text-[9px] font-bold mt-0.5">${meta.label}</span>
+            `;
+
+            if (isAvail) {
+                btn.addEventListener('click', () => enterNode(node));
+            }
+
+            col.appendChild(btn);
+            nodeDomMap.set(node.id, btn);
+        });
+
+        container.appendChild(col);
+    });
+
+    // 延遲一幀繪製 SVG 連線並自動捲動地圖至當前進度
+    requestAnimationFrame(() => {
+        const svgRect = svg.getBoundingClientRect();
+        runState.map.forEach(layer => {
+            layer.forEach(node => {
+                const fromEl = nodeDomMap.get(node.id);
+                if (!fromEl) return;
+                const r1 = fromEl.getBoundingClientRect();
+                const x1 = r1.left + r1.width / 2 - svgRect.left;
+                const y1 = r1.top + r1.height / 2 - svgRect.top;
+
+                node.next.forEach(nextId => {
+                    const toEl = nodeDomMap.get(nextId);
+                    if (!toEl) return;
+                    const r2 = toEl.getBoundingClientRect();
+                    const x2 = r2.left + r2.width / 2 - svgRect.left;
+                    const y2 = r2.top + r2.height / 2 - svgRect.top;
+
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', x1);
+                    line.setAttribute('y1', y1);
+                    line.setAttribute('x2', x2);
+                    line.setAttribute('y2', y2);
+                    const highlight = availableNodeIds.has(nextId) && (runState.currentNodeId === node.id);
+                    line.setAttribute('stroke', highlight ? '#38bdf8' : 'rgba(148, 163, 184, 0.25)');
+                    line.setAttribute('stroke-width', highlight ? '3' : '2');
+                    if (!highlight) line.setAttribute('stroke-dasharray', '5 5');
+                    svg.appendChild(line);
+                });
+            });
+        });
+
+        if (activeColumnEl) {
+            activeColumnEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }
+    });
+}
+
+function enterNode(node) {
+    sfx.init();
+    sfx.playCardDraw();
+    runState.floor = node.floor;
+    runState.currentNodeId = node.id;
+    updateTopBar();
+
+    if (node.type === 'battle' || node.type === 'elite' || node.type === 'midboss' || node.type === 'boss') {
+        startBattle(node.type);
+    } else if (node.type === 'rest') {
+        openRestScreen();
+    } else if (node.type === 'event') {
+        openEventScreen();
+    }
+}
+
+// --- 11. 核心回合制卡牌戰鬥系統 ---
+function startBattle(nodeType) {
+    showScreen('screen-battle');
+    const enemies = generateEncounter(nodeType, runState.floor);
+
+    // 複製牌組為本場抽牌堆並洗牌
+    const drawPile = shuffleArray(runState.deck.map(c => ({ ...c })));
+
+    battleState = {
+        nodeType,
+        turn: 1,
+        energy: runState.maxEnergy,
+        maxEnergy: runState.maxEnergy,
+        drawPile,
+        hand: [],
+        discardPile: [],
+        exhaustPile: [],
+        selectedHandIdx: null,
+        cardsPlayedThisTurn: 0,
+        player: {
+            block: 0,
+            statuses: {},
+            astralBonus: 0,
+            noxiousFumes: 0,
+            juggernautDmg: 0,
+            turnStartDraw: 0,
+            turnStartBlock: 0,
+            thorns: 0
+        },
+        enemies
+    };
+
+    // 開局遺物效果
+    if (runState.relics.includes('chrono_watch')) {
+        battleState.energy += 1;
+    }
+    if (runState.relics.includes('vajra_orb')) {
+        battleState.player.statuses.strength = 2;
+    }
+
+    const initialDraw = runState.relics.includes('perpetual_engine') ? 6 : 5;
+    drawCards(initialDraw);
+    renderBattleUI();
+}
+
+function shuffleArray(arr) {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+}
+
+function drawCards(count) {
+    for (let i = 0; i < count; i++) {
+        if (battleState.hand.length >= 9) break;
+        if (battleState.drawPile.length === 0) {
+            if (battleState.discardPile.length === 0) break;
+            battleState.drawPile = shuffleArray(battleState.discardPile);
+            battleState.discardPile = [];
+        }
+        const card = battleState.drawPile.pop();
+        if (card) {
+            battleState.hand.push(card);
+            sfx.playCardDraw();
+        }
+    }
+}
+
+function getCardEffectiveCost(cardInst) {
+    const def = CARD_DB[cardInst.id];
+    return cardInst.upgraded ? def.upgCost : def.cost;
+}
+
+function onHandCardClick(handIdx) {
+    const cardInst = battleState.hand[handIdx];
+    if (!cardInst) return;
+    const def = CARD_DB[cardInst.id];
+    const cost = getCardEffectiveCost(cardInst);
+
+    if (battleState.energy < cost) {
+        spawnFloatingNotice('⚡ 能量不足！', '#fbbf24');
+        return;
+    }
+
+    if (def.target === 'single') {
+        if (battleState.enemies.length === 1) {
+            playCard(handIdx, battleState.enemies[0]);
+        } else {
+            // 切換選中狀態，等待點擊目標敵人
+            battleState.selectedHandIdx = (battleState.selectedHandIdx === handIdx) ? null : handIdx;
+            renderBattleUI();
+        }
+    } else {
+        playCard(handIdx, null);
+    }
+}
+
+function playCard(handIdx, targetEnemy) {
+    const cardInst = battleState.hand[handIdx];
+    if (!cardInst) return;
+    const def = CARD_DB[cardInst.id];
+    const cost = getCardEffectiveCost(cardInst);
+    if (battleState.energy < cost) return;
+
+    battleState.energy -= cost;
+    battleState.selectedHandIdx = null;
+    battleState.hand.splice(handIdx, 1);
+
+    // 執行卡牌效果上下文
+    const ctx = {
+        player: battleState.player,
+        enemies: battleState.enemies,
+        target: targetEnemy,
+        dealDamage: (enemy, rawDmg) => {
+            if (!enemy || enemy.hp <= 0) return;
+            let dmg = rawDmg + (battleState.player.statuses.strength || 0);
+            if ((battleState.player.statuses.weak || 0) > 0) dmg = Math.floor(dmg * 0.75);
+            if ((enemy.statuses.vulnerable || 0) > 0) dmg = Math.floor(dmg * 1.5);
+            if (runState.relics.includes('viper_fang') && (enemy.statuses.poison || 0) > 0) {
+                dmg = Math.floor(dmg * 1.25);
+            }
+            dmg = Math.max(1, dmg);
+
+            sfx.playAttack();
+            triggerScreenShake();
+            applyDamageToEnemy(enemy, dmg);
+        },
+        gainBlock: (rawBlk) => {
+            sfx.playShield();
+            battleState.player.block += rawBlk;
+            const pEl = document.getElementById('player-battle-card');
+            if (pEl) {
+                const r = pEl.getBoundingClientRect();
+                spawnFloatingTextAt(r.left + r.width / 2, r.top + 30, `+${rawBlk} 🛡️`, '#38bdf8');
+            }
+            if (battleState.player.juggernautDmg > 0 && battleState.enemies.length > 0) {
+                const randE = battleState.enemies[Math.floor(Math.random() * battleState.enemies.length)];
+                applyDamageToEnemy(randE, battleState.player.juggernautDmg);
+            }
+        },
+        applyStatus: (entity, statusKey, amount) => {
+            let finalAmt = amount;
+            if (statusKey === 'poison' && runState.relics.includes('viper_fang') && entity !== battleState.player) {
+                finalAmt += 1;
+                sfx.playPoison();
+            }
+            entity.statuses[statusKey] = (entity.statuses[statusKey] || 0) + finalAmt;
+            const el = entity === battleState.player
+                ? document.getElementById('player-battle-card')
+                : document.getElementById(`enemy_dom_${entity.uid}`);
+            if (el) {
+                const r = el.getBoundingClientRect();
+                const labels = { poison: '🧪劇毒', vulnerable: '🎯易傷', weak: '💫虛弱', strength: '🔥力量' };
+                spawnFloatingTextAt(r.left + r.width / 2, r.top + 20, `${labels[statusKey] || statusKey} +${finalAmt}`, '#a7f3d0');
+            }
+        },
+        drawCards: (n) => drawCards(n),
+        gainEnergy: (n) => {
+            battleState.energy += n;
+            sfx.playPower();
+        },
+        healPlayer: (n) => {
+            runState.hp = Math.min(runState.maxHp, runState.hp + n);
+            updateTopBar();
+            sfx.playPower();
+            spawnFloatingNotice(`💖 回復 +${n} HP`, '#34d399');
+        }
+    };
+
+    if (def.type === 'power') sfx.playPower();
+    def.play(ctx, cardInst.upgraded);
+
+    if (def.exhaust) battleState.exhaustPile.push(cardInst);
+    else battleState.discardPile.push(cardInst);
+
+    // 星辰術士遺物【星界稜鏡】：每打出 3 張牌全體奧術轟炸
+    battleState.cardsPlayedThisTurn += 1;
+    if (runState.relics.includes('astral_prism') && battleState.cardsPlayedThisTurn % 3 === 0) {
+        const boomDmg = 7 + battleState.player.astralBonus;
+        sfx.playPower();
+        spawnFloatingNotice(`🔷 星能共鳴！全體奧術轟炸 ${boomDmg}`, '#38bdf8');
+        [...battleState.enemies].forEach(e => applyDamageToEnemy(e, boomDmg));
+    }
+
+    cleanupDeadEnemies();
+    if (!checkBattleEnd()) {
+        renderBattleUI();
+    }
+}
+
+function applyDamageToEnemy(enemy, dmg) {
+    if (!enemy || enemy.hp <= 0) return;
+    let remaining = dmg;
+    if (enemy.block > 0) {
+        const absorbed = Math.min(enemy.block, remaining);
+        enemy.block -= absorbed;
+        remaining -= absorbed;
+    }
+    enemy.hp = Math.max(0, enemy.hp - remaining);
+
+    const dom = document.getElementById(`enemy_dom_${enemy.uid}`);
+    if (dom) {
+        const r = dom.getBoundingClientRect();
+        spawnFloatingTextAt(r.left + r.width / 2, r.top + 28, `-${dmg}`, '#fb7185');
+    }
+}
+
+function cleanupDeadEnemies() {
+    for (let i = battleState.enemies.length - 1; i >= 0; i--) {
+        if (battleState.enemies[i].hp <= 0) {
+            battleState.enemies.splice(i, 1);
+            if (runState.relics.includes('vampire_fang')) {
+                runState.hp = Math.min(runState.maxHp, runState.hp + 6);
+                updateTopBar();
+                spawnFloatingNotice('🧛 吸血獠牙 +6 HP', '#fb7185');
+            }
+        }
+    }
+}
+
+function checkBattleEnd() {
+    if (battleState.enemies.length === 0) {
+        if (battleState.nodeType === 'boss') {
+            openEndScreen(true);
+        } else {
+            openRewardScreen();
+        }
+        return true;
+    }
+    if (runState.hp <= 0) {
+        openEndScreen(false);
+        return true;
+    }
+    return false;
+}
+
+// --- 12. 結束玩家回合 -> 敵人行動 -> 下一回合 ---
+function endPlayerTurn() {
+    if (!battleState) return;
+    battleState.selectedHandIdx = null;
+
+    // 棄掉所有手牌
+    while (battleState.hand.length > 0) {
+        battleState.discardPile.push(battleState.hand.pop());
+    }
+
+    // 鋼鐵重裝遺物【神盾核心】保留 50% 護甲
+    let nextPlayerBlock = 0;
+    if (runState.relics.includes('aegis_core') && battleState.player.block > 0) {
+        nextPlayerBlock = Math.floor(battleState.player.block * 0.5);
+    }
+
+    // 敵人依序執行意圖
+    for (const enemy of [...battleState.enemies]) {
+        if (enemy.hp <= 0) continue;
+
+        // 劇毒結算（敵人回合開始時）
+        if ((enemy.statuses.poison || 0) > 0) {
+            const pDmg = enemy.statuses.poison;
+            enemy.hp = Math.max(0, enemy.hp - pDmg);
+            enemy.statuses.poison -= 1;
+            sfx.playPoison();
+            const dom = document.getElementById(`enemy_dom_${enemy.uid}`);
+            if (dom) {
+                const r = dom.getBoundingClientRect();
+                spawnFloatingTextAt(r.left + r.width / 2, r.top + 10, `🧪-${pDmg}`, '#34d399');
+            }
+            if (enemy.hp <= 0) continue;
+        }
+
+        // 重置敵人護甲
+        enemy.block = 0;
+
+        const intent = enemy.currentIntent;
+        const calcEnemyAttack = (base) => {
+            let d = base + (enemy.statuses.strength || 0);
+            if ((enemy.statuses.weak || 0) > 0) d = Math.floor(d * 0.75);
+            if ((battleState.player.statuses.vulnerable || 0) > 0) d = Math.floor(d * 1.5);
+            return Math.max(1, d);
+        };
+
+        if (intent.type === 'attack') {
+            dealDamageToPlayer(calcEnemyAttack(intent.val), enemy);
+        } else if (intent.type === 'multi_attack') {
+            for (let h = 0; h < intent.hits; h++) {
+                dealDamageToPlayer(calcEnemyAttack(intent.val), enemy);
+                if (enemy.hp <= 0) break;
+            }
+        } else if (intent.type === 'attack_block') {
+            enemy.block += intent.block;
+            dealDamageToPlayer(calcEnemyAttack(intent.val), enemy);
+        } else if (intent.type === 'block_buff') {
+            enemy.block += intent.block;
+            enemy.statuses.strength = (enemy.statuses.strength || 0) + intent.str;
+            sfx.playPower();
+        } else if (intent.type === 'debuff_poison') {
+            battleState.player.statuses.poison = (battleState.player.statuses.poison || 0) + intent.val;
+            sfx.playPoison();
+        } else if (intent.type === 'debuff_vuln') {
+            battleState.player.statuses.vulnerable = (battleState.player.statuses.vulnerable || 0) + intent.val;
+            sfx.playHurt();
+        } else if (intent.type === 'debuff_weak_vuln') {
+            battleState.player.statuses.weak = (battleState.player.statuses.weak || 0) + intent.val;
+            battleState.player.statuses.vulnerable = (battleState.player.statuses.vulnerable || 0) + intent.val;
+            sfx.playHurt();
+        }
+
+        // 狀態回合遞減
+        if (enemy.statuses.vulnerable > 0) enemy.statuses.vulnerable -= 1;
+        if (enemy.statuses.weak > 0) enemy.statuses.weak -= 1;
+
+        // 切換下一回合意圖
+        enemy.intentIdx = (enemy.intentIdx + 1) % enemy.intents.length;
+        enemy.currentIntent = { ...enemy.intents[enemy.intentIdx] };
+    }
+
+    cleanupDeadEnemies();
+    if (checkBattleEnd()) return;
+
+    // 山銅裝甲檢查（若玩家結束時無護甲）
+    if (runState.relics.includes('orichalcum_plate') && battleState.player.block === 0) {
+        nextPlayerBlock += 6;
+    }
+
+    // 玩家回合開始結算
+    battleState.turn += 1;
+    battleState.energy = battleState.maxEnergy;
+    battleState.player.block = nextPlayerBlock + (battleState.player.turnStartBlock || 0);
+
+    if ((battleState.player.statuses.poison || 0) > 0) {
+        runState.hp = Math.max(0, runState.hp - battleState.player.statuses.poison);
+        battleState.player.statuses.poison -= 1;
+        updateTopBar();
+        if (checkBattleEnd()) return;
+    }
+    if (battleState.player.statuses.vulnerable > 0) battleState.player.statuses.vulnerable -= 1;
+    if (battleState.player.statuses.weak > 0) battleState.player.statuses.weak -= 1;
+
+    // 瘴氣領域被動
+    if (battleState.player.noxiousFumes > 0) {
+        battleState.enemies.forEach(e => {
+            e.statuses.poison = (e.statuses.poison || 0) + battleState.player.noxiousFumes;
+        });
+    }
+
+    const drawCount = (runState.relics.includes('perpetual_engine') ? 6 : 5) + (battleState.player.turnStartDraw || 0);
+    drawCards(drawCount);
+    renderBattleUI();
+}
+
+function dealDamageToPlayer(dmg, attacker = null) {
+    let rem = dmg;
+    if (battleState.player.block > 0) {
+        const absorbed = Math.min(battleState.player.block, rem);
+        battleState.player.block -= absorbed;
+        rem -= absorbed;
+        sfx.playShield();
+    }
+    if (rem > 0) {
+        runState.hp = Math.max(0, runState.hp - rem);
+        sfx.playHurt();
+        triggerScreenShake();
+        const pEl = document.getElementById('player-battle-card');
+        if (pEl) {
+            const r = pEl.getBoundingClientRect();
+            spawnFloatingTextAt(r.left + r.width / 2, r.top + 35, `-${rem} ❤️`, '#f43f5e');
+        }
+    }
+    // 荊棘壁壘反傷結算
+    if (attacker && battleState.player.thorns > 0) {
+        applyDamageToEnemy(attacker, battleState.player.thorns);
+    }
+    updateTopBar();
+}
+
+// --- 13. 戰鬥畫面 UI 渲染 ---
+function renderBattleUI() {
+    document.getElementById('battle-player-name').textContent = `${runState.classCfg.icon} ${runState.classCfg.name}`;
+    document.getElementById('battle-player-avatar').textContent = runState.classCfg.icon;
+    document.getElementById('battle-turn-badge').textContent = `第 ${battleState.turn} 回合`;
+    document.getElementById('battle-player-hp').textContent = `${runState.hp} / ${runState.maxHp}`;
+    document.getElementById('battle-player-hp-bar').style.width = `${(runState.hp / runState.maxHp) * 100}%`;
+    document.getElementById('battle-player-block').textContent = battleState.player.block;
+
+    // 職業專屬被動提示
+    const passiveBox = document.getElementById('battle-class-passive-box');
+    if (runState.classKey === 'mage') {
+        passiveBox.textContent = `🔷 星能: ${battleState.cardsPlayedThisTurn % 3}/3`;
+    } else if (runState.classKey === 'assassin') {
+        passiveBox.textContent = `🐍 劇毒增傷 +25%`;
+    } else {
+        passiveBox.textContent = `💠 保留 50% 護甲`;
+    }
+
+    renderStatusPills(document.getElementById('battle-player-statuses'), battleState.player.statuses);
+
+    // 渲染敵人陣營
+    const enemiesBox = document.getElementById('enemies-container');
+    enemiesBox.innerHTML = '';
+    const isSelectingTarget = battleState.selectedHandIdx !== null;
+    document.getElementById('target-hint-banner').classList.toggle('hidden', !isSelectingTarget);
+
+    battleState.enemies.forEach(enemy => {
+        const card = document.createElement('div');
+        card.id = `enemy_dom_${enemy.uid}`;
+        card.className = `enemy-box w-36 sm:w-56 bg-slate-950/88 border-2 ${
+            enemy.isBoss ? 'border-purple-500/70' : enemy.isElite ? 'border-rose-500/70' : 'border-slate-700'
+        } rounded-2xl sm:rounded-3xl p-2.5 sm:p-4 shadow-2xl flex flex-col items-center relative ${isSelectingTarget ? 'enemy-targetable' : ''}`;
+
+        // 意圖徽章
+        const intentHtml = formatIntentBadge(enemy);
+
+        card.innerHTML = `
+            <div class="mb-1 sm:mb-2 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-slate-900 border border-slate-700 text-[10px] sm:text-xs font-black flex items-center gap-1 shadow">
+                ${intentHtml}
+            </div>
+            <div class="text-[11px] sm:text-xs font-bold text-slate-300 mb-0.5 sm:mb-1 truncate max-w-full">${enemy.name}</div>
+            <div class="w-11 h-11 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-2xl sm:text-4xl my-1 sm:my-1.5 shadow-inner">
+                ${enemy.icon}
+            </div>
+            <div class="w-full mt-1 sm:mt-2">
+                <div class="flex justify-between text-[10px] sm:text-xs font-bold mb-0.5 sm:mb-1">
+                    <span class="text-rose-400">HP ${enemy.hp}/${enemy.maxHp}</span>
+                    ${enemy.block > 0 ? `<span class="text-sky-300 font-mono">🛡️${enemy.block}</span>` : ''}
+                </div>
+                <div class="w-full h-2 sm:h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800 p-0.5">
+                    <div class="h-full bg-gradient-to-r from-rose-600 to-orange-400 rounded-full transition-all duration-200" style="width: ${(enemy.hp / enemy.maxHp) * 100}%"></div>
+                </div>
+            </div>
+            <div id="enemy_status_${enemy.uid}" class="flex flex-wrap justify-center gap-1 mt-1.5 sm:mt-2 empty:hidden"></div>
+        `;
+
+        if (isSelectingTarget) {
+            card.addEventListener('click', () => {
+                playCard(battleState.selectedHandIdx, enemy);
+            });
+        }
+
+        enemiesBox.appendChild(card);
+        renderStatusPills(document.getElementById(`enemy_status_${enemy.uid}`), enemy.statuses);
+    });
+
+    // 能量與牌堆數量
+    document.getElementById('battle-energy-text').textContent = `${battleState.energy}/${battleState.maxEnergy}`;
+    document.getElementById('battle-draw-count').textContent = battleState.drawPile.length;
+    document.getElementById('battle-discard-count').textContent = battleState.discardPile.length;
+
+    // 渲染手牌（使用內層 hand-inner-wrap 確保手機寬度不足時從最左側完整起算，不會被截斷）
+    const handContainer = document.getElementById('hand-container');
+    handContainer.innerHTML = '';
+    const handWrap = document.createElement('div');
+    handWrap.className = 'hand-inner-wrap';
+
+    battleState.hand.forEach((cardInst, idx) => {
+        const canPlay = battleState.energy >= getCardEffectiveCost(cardInst);
+        const isSelected = battleState.selectedHandIdx === idx;
+        const cardEl = createCardElement(cardInst, {
+            disabled: !canPlay,
+            selected: isSelected,
+            onClick: () => onHandCardClick(idx)
+        });
+        handWrap.appendChild(cardEl);
+    });
+    handContainer.appendChild(handWrap);
+}
+
+function formatIntentBadge(enemy) {
+    const it = enemy.currentIntent;
+    const calcAtk = (v) => {
+        let d = v + (enemy.statuses.strength || 0);
+        if ((enemy.statuses.weak || 0) > 0) d = Math.floor(d * 0.75);
+        return Math.max(1, d);
+    };
+
+    if (it.type === 'attack') {
+        return `<span class="text-rose-400">⚔️ 攻擊 ${calcAtk(it.val)}</span>`;
+    }
+    if (it.type === 'multi_attack') {
+        return `<span class="text-rose-400">⚔️ 連擊 ${calcAtk(it.val)}x${it.hits}</span>`;
+    }
+    if (it.type === 'attack_block') {
+        return `<span class="text-amber-300">⚔️${calcAtk(it.val)} + 🛡️${it.block}</span>`;
+    }
+    if (it.type === 'block_buff') {
+        return `<span class="text-sky-300">🛡️護甲 + 🔥蓄力</span>`;
+    }
+    if (it.type === 'debuff_poison') {
+        return `<span class="text-emerald-400">🧪 施毒 ${it.val}</span>`;
+    }
+    return `<span class="text-purple-300">🧿 詛咒削弱</span>`;
+}
+
+function renderStatusPills(container, statuses) {
+    if (!container) return;
+    container.innerHTML = '';
+    const map = {
+        strength: { icon: '🔥', label: '力量', cls: 'bg-amber-950/90 text-amber-300 border-amber-500/40' },
+        poison: { icon: '🧪', label: '劇毒', cls: 'bg-emerald-950/90 text-emerald-300 border-emerald-500/40' },
+        vulnerable: { icon: '🎯', label: '易傷', cls: 'bg-rose-950/90 text-rose-300 border-rose-500/40' },
+        weak: { icon: '💫', label: '虛弱', cls: 'bg-purple-950/90 text-purple-300 border-purple-500/40' }
+    };
+
+    Object.entries(statuses).forEach(([k, val]) => {
+        if (!val || val <= 0 || !map[k]) return;
+        const m = map[k];
+        const span = document.createElement('span');
+        span.className = `px-1.5 py-0.5 rounded-md border text-[10px] font-bold ${m.cls}`;
+        span.textContent = `${m.icon}${m.label} ${val}`;
+        container.appendChild(span);
+    });
+}
+
+// --- 14. 通用卡牌 DOM 生成器 ---
+function createCardElement(cardInst, options = {}) {
+    const def = CARD_DB[cardInst.id];
+    const cost = getCardEffectiveCost(cardInst);
+    const typeLabel = { attack: '攻擊', skill: '技能', power: '能力' }[def.type];
+    const typeColor = {
+        attack: 'text-rose-400 bg-rose-950/90 border-rose-500/40',
+        skill: 'text-sky-400 bg-sky-950/90 border-sky-500/40',
+        power: 'text-purple-400 bg-purple-950/90 border-purple-500/40'
+    }[def.type];
+
+    const div = document.createElement('div');
+    div.className = `game-card type-${def.type} w-32 sm:w-40 h-44 sm:h-52 border-2 rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between relative cursor-pointer shrink-0 snap-center ${
+        options.disabled ? 'card-disabled' : ''
+    } ${options.selected ? 'card-selected' : ''} ${cardInst.upgraded ? 'card-upgraded' : ''}`;
+
+    div.innerHTML = `
+        <div>
+            <div class="flex justify-between items-center mb-1 sm:mb-1.5">
+                <div class="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-cyan-500 to-blue-700 border border-cyan-200 flex items-center justify-center text-[11px] sm:text-xs font-black font-mono text-white shadow">
+                    ${cost}
+                </div>
+                <span class="px-1.5 sm:px-2 py-0.5 rounded-full border text-[9px] sm:text-[10px] font-bold ${typeColor}">
+                    ${typeLabel}
+                </span>
+            </div>
+            <div class="text-center my-1 sm:my-1.5">
+                <div class="text-xl sm:text-3xl mb-0.5 sm:mb-1">${def.icon}</div>
+                <div class="text-xs sm:text-sm font-black leading-tight ${cardInst.upgraded ? 'text-amber-300' : 'text-white'}">
+                    ${def.name}${cardInst.upgraded ? '+' : ''}
+                </div>
+            </div>
+        </div>
+        <div class="bg-slate-950/85 border border-slate-800/90 rounded-xl p-1.5 sm:p-2 text-[10px] sm:text-[11px] text-slate-200 leading-snug text-center min-h-[48px] sm:min-h-[56px] flex items-center justify-center">
+            <div>${def.desc(cardInst.upgraded)}</div>
+        </div>
+    `;
+
+    if (options.onClick) {
+        div.addEventListener('click', options.onClick);
+    }
+    return div;
+}
+
+// --- 15. 戰利品獎勵畫面 ---
+function openRewardScreen() {
+    showScreen('screen-reward');
+    sfx.playPower();
+
+    const isMidBoss = battleState.nodeType === 'midboss';
+    let goldGain = isMidBoss ? 90 : (battleState.nodeType === 'elite' ? 55 : 34);
+    if (runState.relics.includes('star_magnet')) goldGain = Math.round(goldGain * 1.35);
+    runState.gold += goldGain;
+
+    // 菁英戰或第8層守門首領必掉一件未持有的星界遺物（守門首領額外回復 50% 生命！）
+    const relicBanner = document.getElementById('reward-relic-banner');
+    if (battleState.nodeType === 'elite' || isMidBoss) {
+        let bannerText = '';
+        if (isMidBoss) {
+            const heal = Math.round(runState.maxHp * 0.5);
+            runState.hp = Math.min(runState.maxHp, runState.hp + heal);
+            bannerText += `✨ 擊破第 8 層守門首領！生命回復 +${heal} HP！<br>`;
+        }
+        const availRelics = Object.keys(RELIC_DB).filter(id => !runState.relics.includes(id));
+        if (availRelics.length > 0) {
+            const picked = availRelics[Math.floor(Math.random() * availRelics.length)];
+            runState.relics.push(picked);
+            const r = RELIC_DB[picked];
+            bannerText += `🎁 獲得戰利品遺物：【${r.icon} ${r.name}】— ${r.desc}`;
+        }
+        if (bannerText) {
+            relicBanner.classList.remove('hidden');
+            relicBanner.innerHTML = bannerText;
+        } else {
+            relicBanner.classList.add('hidden');
+        }
+    } else {
+        relicBanner.classList.add('hidden');
+    }
+
+    updateTopBar();
+    document.getElementById('reward-summary-text').textContent = `獲得 +${goldGain} ✨ 星塵！選擇一張新卡牌加入你的牌組：`;
+
+    const grid = document.getElementById('reward-cards-grid');
+    grid.innerHTML = '';
+    const allCardIds = Object.keys(CARD_DB);
+    const choices = shuffleArray(allCardIds).slice(0, 3);
+
+    choices.forEach(cId => {
+        const isUpgradedDrop = (isMidBoss || runState.floor >= 10) && Math.random() < 0.45;
+        const inst = { uid: `rew_${Date.now()}_${Math.random()}`, id: cId, upgraded: isUpgradedDrop };
+        const el = createCardElement(inst, {
+            onClick: () => {
+                sfx.playCardDraw();
+                runState.deck.push(inst);
+                updateTopBar();
+                renderMap();
+            }
+        });
+        grid.appendChild(el);
+    });
+}
+
+// --- 16. 星火營火畫面（回血 / 鍛造升級） ---
+function openRestScreen() {
+    showScreen('screen-rest');
+    sfx.playPower();
+
+    const healAmt = Math.round(runState.maxHp * 0.35);
+    document.getElementById('rest-heal-desc').textContent = `立即回復 ${healAmt} 點生命值（當前 ${runState.hp}/${runState.maxHp}），為接下來的強敵做好準備。`;
+    document.getElementById('rest-options-grid').classList.remove('hidden');
+    document.getElementById('rest-upgrade-picker').classList.add('hidden');
+}
+
+// --- 17. 星界奇遇 / 秘法商店畫面（含刪牌精簡牌組服務） ---
+function openEventScreen() {
+    showScreen('screen-event');
+    const area = document.getElementById('event-content-area');
+    area.innerHTML = '';
+
+    // 隨機抽 3 張折扣卡牌 + 1 件商店遺物 + 刪牌精簡服務
+    const cardChoices = shuffleArray(Object.keys(CARD_DB)).slice(0, 3).map(id => ({
+        card: { uid: `shop_${Date.now()}_${Math.random()}`, id, upgraded: Math.random() < 0.35 },
+        price: 42 + Math.floor(Math.random() * 18)
+    }));
+
+    const availRelics = Object.keys(RELIC_DB).filter(id => !runState.relics.includes(id));
+    const shopRelicId = availRelics.length > 0 ? availRelics[Math.floor(Math.random() * availRelics.length)] : null;
+    const relicPrice = 105;
+    const removePrice = 50;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 items-center justify-items-center';
+
+    cardChoices.forEach(item => {
+        const box = document.createElement('div');
+        box.className = 'flex flex-col items-center gap-2';
+        const cardEl = createCardElement(item.card);
+        const buyBtn = document.createElement('button');
+        buyBtn.className = 'px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs cursor-pointer transition';
+        buyBtn.textContent = `購買 (${item.price} ✨)`;
+        buyBtn.addEventListener('click', () => {
+            if (runState.gold >= item.price) {
+                runState.gold -= item.price;
+                runState.deck.push(item.card);
+                sfx.playPower();
+                updateTopBar();
+                buyBtn.disabled = true;
+                buyBtn.textContent = '已購入 ✓';
+                buyBtn.className = 'px-4 py-1.5 rounded-xl bg-slate-800 text-slate-400 font-bold text-xs';
+            } else {
+                spawnFloatingNotice('✨ 星塵不足！', '#fbbf24');
+            }
+        });
+        box.appendChild(cardEl);
+        box.appendChild(buyBtn);
+        wrapper.appendChild(box);
+    });
+
+    if (shopRelicId) {
+        const r = RELIC_DB[shopRelicId];
+        const rBox = document.createElement('div');
+        rBox.className = 'w-36 sm:w-40 h-48 sm:h-52 bg-purple-950/70 border-2 border-purple-400/60 rounded-2xl p-3 flex flex-col justify-between text-center';
+        rBox.innerHTML = `
+            <div>
+                <div class="text-[10px] font-bold text-purple-300">遠古遺物</div>
+                <div class="text-2xl sm:text-3xl my-1.5">${r.icon}</div>
+                <div class="text-xs sm:text-sm font-black text-white">${r.name}</div>
+                <p class="text-[10px] sm:text-[11px] text-slate-300 mt-1 leading-snug">${r.desc}</p>
+            </div>
+        `;
+        const buyRelicBtn = document.createElement('button');
+        buyRelicBtn.className = 'w-full py-1.5 rounded-xl bg-purple-500 hover:bg-purple-400 text-white font-black text-xs cursor-pointer transition';
+        buyRelicBtn.textContent = `購買 (${relicPrice} ✨)`;
+        buyRelicBtn.addEventListener('click', () => {
+            if (runState.gold >= relicPrice) {
+                runState.gold -= relicPrice;
+                runState.relics.push(shopRelicId);
+                sfx.playPower();
+                updateTopBar();
+                buyRelicBtn.disabled = true;
+                buyRelicBtn.textContent = '已購入 ✓';
+                buyRelicBtn.className = 'w-full py-1.5 rounded-xl bg-slate-800 text-slate-400 font-bold text-xs';
+            } else {
+                spawnFloatingNotice('✨ 星塵不足！', '#fbbf24');
+            }
+        });
+        rBox.appendChild(buyRelicBtn);
+        wrapper.appendChild(rBox);
+    }
+
+    // 牌組淨化（移除 1 張基礎廢牌）服務
+    const purgeBox = document.createElement('div');
+    purgeBox.className = 'w-36 sm:w-40 h-48 sm:h-52 bg-rose-950/60 border-2 border-rose-400/50 rounded-2xl p-3 flex flex-col justify-between text-center';
+    purgeBox.innerHTML = `
+        <div>
+            <div class="text-[10px] font-bold text-rose-300">秘法淨化</div>
+            <div class="text-2xl sm:text-3xl my-1.5">🔥</div>
+            <div class="text-xs sm:text-sm font-black text-white">移除一張卡牌</div>
+            <p class="text-[10px] sm:text-[11px] text-slate-300 mt-1 leading-snug">永久從牌組中刪除 1 張不需要的牌，讓核心構築更容易抽到！</p>
+        </div>
+    `;
+    const purgeBtn = document.createElement('button');
+    purgeBtn.className = 'w-full py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs cursor-pointer transition';
+    purgeBtn.textContent = `淨化 (${removePrice} ✨)`;
+    purgeBtn.addEventListener('click', () => {
+        if (runState.deck.length <= 5) {
+            spawnFloatingNotice('牌組已達最小張數上限！', '#fbbf24');
+            return;
+        }
+        if (runState.gold < removePrice) {
+            spawnFloatingNotice('✨ 星塵不足！', '#fbbf24');
+            return;
+        }
+        openCardRemovalModal(removePrice, purgeBtn);
+    });
+    purgeBox.appendChild(purgeBtn);
+    wrapper.appendChild(purgeBox);
+
+    area.appendChild(wrapper);
+}
+
+function openCardRemovalModal(cost, triggerBtn) {
+    document.getElementById('modal-deck-title').textContent = '🔥 選擇一張要永久移除的卡牌';
+    const grid = document.getElementById('modal-deck-grid');
+    grid.innerHTML = '';
+    runState.deck.forEach((c, idx) => {
+        const el = createCardElement(c, {
+            onClick: () => {
+                runState.gold -= cost;
+                const removedName = CARD_DB[c.id].name;
+                runState.deck.splice(idx, 1);
+                sfx.playPower();
+                updateTopBar();
+                document.getElementById('modal-deck').classList.add('hidden');
+                spawnFloatingNotice(`🔥 已移除：${removedName}`, '#fb7185');
+                if (triggerBtn) {
+                    triggerBtn.disabled = true;
+                    triggerBtn.textContent = '已淨化 ✓';
+                    triggerBtn.className = 'w-full py-1.5 rounded-xl bg-slate-800 text-slate-400 font-bold text-xs';
+                }
+            }
+        });
+        grid.appendChild(el);
+    });
+    document.getElementById('modal-deck').classList.remove('hidden');
+}
+
+// --- 18. 勝利 / 失敗結算畫面 ---
+function openEndScreen(isVictory) {
+    showScreen('screen-end');
+    sfx.playPower();
+
+    document.getElementById('end-badge').textContent = isVictory ? 'ASCENSION COMPLETE • 15層制霸' : 'SOUL SHATTERED • 攀登止步';
+    document.getElementById('end-title').textContent = isVictory ? '👑 星界征服者！' : '💀 靈魂消散於星海';
+    document.getElementById('end-subtitle').textContent = isVictory
+        ? `你駕馭【${runState.classCfg.name}】跨越 15 層星塔試煉，徹底擊碎了吞星巨像！`
+        : `你在星塔第 ${runState.floor} / 15 層倒下了，調整構築策略再次挑戰吧！`;
+
+    document.getElementById('end-stat-floor').textContent = `${runState.floor} / 15`;
+    document.getElementById('end-stat-deck').textContent = `${runState.deck.length} 張`;
+    document.getElementById('end-stat-relics').textContent = `${runState.relics.length} 件`;
+}
+
+// --- 19. 視覺特效輔助 ---
+function triggerScreenShake() {
+    const root = document.getElementById('app-root');
+    root.classList.remove('shake-active');
+    void root.offsetWidth;
+    root.classList.add('shake-active');
+}
+
+function spawnFloatingTextAt(x, y, text, color) {
+    const el = document.createElement('div');
+    el.className = 'floating-dmg text-base sm:text-lg';
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    el.style.color = color;
+    el.textContent = text;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 950);
+}
+
+function spawnFloatingNotice(text, color) {
+    spawnFloatingTextAt(window.innerWidth / 2, window.innerHeight * 0.42, text, color);
+}
+
+// --- 20. 牌組檢視器彈窗 ---
+function openDeckModal(title, cardList) {
+    document.getElementById('modal-deck-title').textContent = `${title}（共 ${cardList.length} 張）`;
+    const grid = document.getElementById('modal-deck-grid');
+    grid.innerHTML = '';
+    cardList.forEach(c => {
+        grid.appendChild(createCardElement(c));
+    });
+    document.getElementById('modal-deck').classList.remove('hidden');
+}
+
+// --- 21. 事件監聽綁定 ---
+document.getElementById('btn-start-run').addEventListener('click', () => {
+    sfx.init();
+    sfx.playPower();
+    runState = createNewRun(selectedClassKey);
+    renderMap();
+});
+
+document.getElementById('btn-end-turn').addEventListener('click', () => {
+    endPlayerTurn();
+});
+
+document.getElementById('btn-skip-reward').addEventListener('click', () => {
+    runState.gold += 15;
+    updateTopBar();
+    renderMap();
+});
+
+document.getElementById('btn-rest-heal').addEventListener('click', () => {
+    const healAmt = Math.round(runState.maxHp * 0.35);
+    runState.hp = Math.min(runState.maxHp, runState.hp + healAmt);
+    sfx.playPower();
+    updateTopBar();
+    renderMap();
+});
+
+document.getElementById('btn-rest-smith').addEventListener('click', () => {
+    const upgradable = runState.deck.filter(c => !c.upgraded);
+    if (upgradable.length === 0) {
+        spawnFloatingNotice('所有卡牌皆已滿級！', '#fbbf24');
+        return;
+    }
+    document.getElementById('rest-options-grid').classList.add('hidden');
+    document.getElementById('rest-upgrade-picker').classList.remove('hidden');
+
+    const grid = document.getElementById('rest-upgrade-cards');
+    grid.innerHTML = '';
+    upgradable.forEach(cardInst => {
+        const el = createCardElement(cardInst, {
+            onClick: () => {
+                cardInst.upgraded = true;
+                sfx.playPower();
+                spawnFloatingNotice(`⚒️ 鍛造成功：${CARD_DB[cardInst.id].name}+`, '#fde047');
+                renderMap();
+            }
+        });
+        grid.appendChild(el);
+    });
+});
+
+document.getElementById('btn-cancel-smith').addEventListener('click', () => {
+    document.getElementById('rest-upgrade-picker').classList.add('hidden');
+    document.getElementById('rest-options-grid').classList.remove('hidden');
+});
+
+document.getElementById('btn-leave-rest').addEventListener('click', () => {
+    renderMap();
+});
+
+document.getElementById('btn-leave-event').addEventListener('click', () => {
+    renderMap();
+});
+
+document.getElementById('btn-play-again').addEventListener('click', () => {
+    renderTitleClasses();
+    showScreen('screen-title');
+});
+
+// 放棄戰鬥（二次確認彈窗）事件綁定
+document.getElementById('btn-abandon').addEventListener('click', () => {
+    sfx.init();
+    sfx.playCardDraw();
+    document.getElementById('modal-abandon').classList.remove('hidden');
+});
+document.getElementById('btn-cancel-abandon').addEventListener('click', () => {
+    document.getElementById('modal-abandon').classList.add('hidden');
+});
+document.getElementById('btn-confirm-abandon').addEventListener('click', () => {
+    sfx.playHurt();
+    document.getElementById('modal-abandon').classList.add('hidden');
+    battleState = null;
+    runState = null;
+    renderTitleClasses();
+    showScreen('screen-title');
+});
+
+document.getElementById('btn-view-deck').addEventListener('click', () => {
+    if (runState) openDeckModal('🃏 你的完整牌組', runState.deck);
+});
+document.getElementById('btn-draw-pile').addEventListener('click', () => {
+    if (battleState) openDeckModal('📚 本場抽牌堆', battleState.drawPile);
+});
+document.getElementById('btn-discard-pile').addEventListener('click', () => {
+    if (battleState) openDeckModal('🗑️ 本場棄牌堆', battleState.discardPile);
+});
+document.getElementById('btn-close-deck').addEventListener('click', () => {
+    document.getElementById('modal-deck').classList.add('hidden');
+});
+
+document.getElementById('btn-help').addEventListener('click', () => {
+    document.getElementById('modal-help').classList.remove('hidden');
+});
+document.getElementById('btn-title-guide').addEventListener('click', () => {
+    document.getElementById('modal-help').classList.remove('hidden');
+});
+document.getElementById('btn-close-help').addEventListener('click', () => {
+    document.getElementById('modal-help').classList.add('hidden');
+});
+
+document.getElementById('btn-mute').addEventListener('click', (e) => {
+    sfx.init();
+    const muted = sfx.toggleMute();
+    e.currentTarget.textContent = muted ? '🔇' : '🔊';
+});
+
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape') {
+        if (battleState && battleState.selectedHandIdx !== null) {
+            battleState.selectedHandIdx = null;
+            renderBattleUI();
+        }
+        document.getElementById('modal-deck').classList.add('hidden');
+        document.getElementById('modal-help').classList.add('hidden');
+        document.getElementById('modal-abandon').classList.add('hidden');
+    }
+});
+
+// --- 22. 背景動態星塵畫布 ---
+const bgCanvas = document.getElementById('bgCanvas');
+const bgCtx = bgCanvas.getContext('2d');
+let stars = [];
+
+function initStars() {
+    bgCanvas.width = window.innerWidth;
+    bgCanvas.height = window.innerHeight;
+    stars = Array.from({ length: 75 }, () => ({
+        x: Math.random() * bgCanvas.width,
+        y: Math.random() * bgCanvas.height,
+        r: 0.6 + Math.random() * 1.8,
+        speed: 6 + Math.random() * 16,
+        alpha: 0.25 + Math.random() * 0.65
+    }));
+}
+window.addEventListener('resize', initStars);
+
+let lastBgTime = 0;
+function animateBg(ts) {
+    const dt = Math.min(0.05, (ts - lastBgTime) / 1000 || 0.016);
+    lastBgTime = ts;
+
+    bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+    for (const s of stars) {
+        s.y -= s.speed * dt;
+        if (s.y < 0) {
+            s.y = bgCanvas.height;
+            s.x = Math.random() * bgCanvas.width;
+        }
+        bgCtx.fillStyle = `rgba(186, 230, 253, ${s.alpha})`;
+        bgCtx.beginPath();
+        bgCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        bgCtx.fill();
+    }
+    requestAnimationFrame(animateBg);
+}
+
+window.onload = function () {
+    initStars();
+    renderTitleClasses();
+    showScreen('screen-title');
+    requestAnimationFrame(animateBg);
+};
+</script>
+</body>
+</html>
